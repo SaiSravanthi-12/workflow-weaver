@@ -3,13 +3,12 @@
  * RLS guarantees users only see their own rows.
  */
 import { supabase } from "@/integrations/supabase/client";
-import { migrateComments } from "./comments";
-import type { CommentMap, WorkflowEdge, WorkflowNode } from "./types";
+import type { WorkflowEdge, WorkflowNode } from "./types";
 
 export interface WorkflowGraph {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-  comments: CommentMap;
+  comments?: Record<string, string>;
 }
 
 export interface SavedWorkflow {
@@ -31,7 +30,7 @@ interface DbRow {
 }
 
 function toSaved(row: DbRow): SavedWorkflow {
-  const graph = (row.graph ?? {}) as Partial<WorkflowGraph>;
+  const graph = (row.graph ?? { nodes: [], edges: [], comments: {} }) as WorkflowGraph;
   return {
     id: row.id,
     name: row.name,
@@ -39,7 +38,7 @@ function toSaved(row: DbRow): SavedWorkflow {
     graph: {
       nodes: Array.isArray(graph.nodes) ? graph.nodes : [],
       edges: Array.isArray(graph.edges) ? graph.edges : [],
-      comments: migrateComments(graph.comments),
+      comments: graph.comments ?? {},
     },
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -70,7 +69,7 @@ export async function createWorkflow(input: {
   description?: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-  comments?: CommentMap;
+  comments?: Record<string, string>;
 }): Promise<SavedWorkflow> {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("Not authenticated");
@@ -100,7 +99,7 @@ export async function updateWorkflow(
     description?: string | null;
     nodes?: WorkflowNode[];
     edges?: WorkflowEdge[];
-    comments?: CommentMap;
+    comments?: Record<string, string>;
   },
 ): Promise<SavedWorkflow> {
   const update: Record<string, unknown> = {};

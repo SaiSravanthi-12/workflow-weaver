@@ -1,6 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
-import type { CommentNote, NodeKind, WorkflowNode } from "../types";
+import type { NodeKind, WorkflowNode } from "../types";
 import {
   PlayCircle,
   CheckSquare,
@@ -35,7 +35,7 @@ interface NodeShellProps {
   showSource?: boolean;
   showTarget?: boolean;
   badge?: string;
-  notes?: CommentNote[];
+  comment?: string;
 }
 
 function NodeShell({
@@ -46,16 +46,10 @@ function NodeShell({
   showSource = true,
   showTarget = true,
   badge,
-  notes,
+  comment,
 }: NodeShellProps) {
   const Icon = ICONS[kind];
-  const noteCount = notes?.length ?? 0;
-  const lastNote = noteCount > 0 ? notes![noteCount - 1] : null;
-  const tooltip = notes
-    ?.slice(-3)
-    .map((n) => `${n.author}: ${n.text}`)
-    .join("\n");
-
+  const hasComment = !!comment && comment.trim().length > 0;
   return (
     <div
       className={cn(
@@ -66,13 +60,13 @@ function NodeShell({
           : "border-border hover:border-foreground/20",
       )}
     >
-      {noteCount > 0 && (
+      {hasComment && (
         <div
           className="absolute -right-1.5 -top-1.5 z-10 flex h-5 items-center gap-0.5 rounded-full bg-[var(--node-approval)] px-1.5 text-[10px] font-semibold text-white shadow-sm ring-2 ring-card"
-          title={tooltip}
+          title={comment}
         >
           <MessageSquare className="h-2.5 w-2.5" />
-          <span>{noteCount}</span>
+          <span>1</span>
         </div>
       )}
       {showTarget && <Handle type="target" position={Position.Top} />}
@@ -99,23 +93,13 @@ function NodeShell({
           <div className="truncate text-sm font-semibold text-foreground">
             {title || "Untitled"}
           </div>
-          {subtitle && (
-            <div className="truncate text-xs text-muted-foreground">{subtitle}</div>
-          )}
+          {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
         </div>
       </div>
-      {lastNote && (
+      {hasComment && (
         <div className="flex items-start gap-1.5 border-t border-dashed border-border bg-secondary/40 px-3 py-1.5">
           <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-              <span className="font-medium text-foreground">{lastNote.author}:</span>{" "}
-              {lastNote.text}
-            </p>
-            {noteCount > 1 && (
-              <p className="text-[10px] text-muted-foreground/70">+{noteCount - 1} more</p>
-            )}
-          </div>
+          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{comment}</p>
         </div>
       )}
       {showSource && <Handle type="source" position={Position.Bottom} />}
@@ -125,11 +109,6 @@ function NodeShell({
 
 type Props = NodeProps<WorkflowNode>;
 
-function pickNotes(data: unknown): CommentNote[] | undefined {
-  const notes = (data as { notes?: unknown }).notes;
-  return Array.isArray(notes) ? (notes as CommentNote[]) : undefined;
-}
-
 export function StartNode({ data, selected }: Props) {
   if (data.kind !== "start") return null;
   return (
@@ -137,11 +116,9 @@ export function StartNode({ data, selected }: Props) {
       kind="start"
       selected={!!selected}
       title={data.title}
-      subtitle={
-        data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"
-      }
+      subtitle={data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"}
       showTarget={false}
-      notes={pickNotes(data)}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -153,11 +130,9 @@ export function TaskNode({ data, selected }: Props) {
       kind="task"
       selected={!!selected}
       title={data.title}
-      subtitle={
-        data.assignee ? `Assignee: ${data.assignee}` : data.description || "Human task"
-      }
+      subtitle={data.assignee ? `Assignee: ${data.assignee}` : data.description || "Human task"}
       badge={data.dueDate || undefined}
-      notes={pickNotes(data)}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -170,10 +145,8 @@ export function ApprovalNode({ data, selected }: Props) {
       selected={!!selected}
       title={data.title}
       subtitle={`Approver: ${data.approverRole}`}
-      badge={
-        data.autoApproveThreshold > 0 ? `auto < ${data.autoApproveThreshold}` : undefined
-      }
-      notes={pickNotes(data)}
+      badge={data.autoApproveThreshold > 0 ? `auto < ${data.autoApproveThreshold}` : undefined}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -186,7 +159,7 @@ export function AutomatedNode({ data, selected }: Props) {
       selected={!!selected}
       title={data.title}
       subtitle={data.actionId ? data.actionId : "No action selected"}
-      notes={pickNotes(data)}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -201,7 +174,7 @@ export function EndNode({ data, selected }: Props) {
       subtitle={data.message}
       showSource={false}
       badge={data.summary ? "summary" : undefined}
-      notes={pickNotes(data)}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }

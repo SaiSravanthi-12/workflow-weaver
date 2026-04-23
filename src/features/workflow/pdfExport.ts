@@ -3,13 +3,12 @@
  * Uses jsPDF's vector text engine — no canvas rasterization, fast and crisp.
  */
 import { jsPDF } from "jspdf";
-import type { CommentMap, SimulationResult, ValidationIssue } from "./types";
+import type { SimulationResult, ValidationIssue } from "./types";
 
 interface ExportInput {
   workflowName: string;
   result: SimulationResult;
   issues: ValidationIssue[];
-  comments?: CommentMap;
 }
 
 const STATUS_COLOR: Record<string, [number, number, number]> = {
@@ -18,20 +17,7 @@ const STATUS_COLOR: Record<string, [number, number, number]> = {
   error: [185, 28, 28],
 };
 
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
-export function exportSimulationPdf({
-  workflowName,
-  result,
-  issues,
-  comments,
-}: ExportInput): void {
+export function exportSimulationPdf({ workflowName, result, issues }: ExportInput): void {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -144,31 +130,7 @@ export function exportSimulationPdf({
     doc.setTextColor(150, 160, 180);
     doc.setFontSize(8);
     doc.text(step.nodeKind.toUpperCase(), margin + 30, y);
-    y += 12;
-
-    // Comments / notes for this node
-    const notes = comments?.[step.nodeId] ?? [];
-    for (const note of notes) {
-      y = ensureSpace(doc, y, pageHeight, margin, 24);
-      doc.setDrawColor(220, 225, 235);
-      doc.setFillColor(248, 250, 255);
-      const headerY = y;
-      doc.setFontSize(8);
-      doc.setTextColor(60, 70, 90);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${note.author}`, margin + 30, headerY);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(140, 150, 170);
-      doc.text(`· ${formatTime(note.createdAt)}`, margin + 30 + doc.getTextWidth(note.author) + 4, headerY);
-      y += 11;
-      doc.setTextColor(60, 70, 90);
-      doc.setFontSize(9);
-      const noteLines = doc.splitTextToSize(note.text, pageWidth - margin * 2 - 36);
-      doc.text(noteLines, margin + 36, y);
-      y += 11 * noteLines.length + 4;
-    }
-
-    y += 6;
+    y += 16;
   }
 
   // Footer
