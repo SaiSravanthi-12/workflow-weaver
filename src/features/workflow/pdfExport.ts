@@ -139,12 +139,9 @@ export function exportSimulationPdf({ workflowName, result, issues }: ExportInpu
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(160, 170, 190);
-    doc.text(
-      `HR Workflow Designer · Page ${i} of ${pages}`,
-      pageWidth / 2,
-      pageHeight - 20,
-      { align: "center" },
-    );
+    doc.text(`HR Workflow Designer · Page ${i} of ${pages}`, pageWidth / 2, pageHeight - 20, {
+      align: "center",
+    });
   }
 
   const safe = workflowName.replace(/[^a-z0-9-_ ]/gi, "_").slice(0, 60) || "workflow";
@@ -157,7 +154,12 @@ function section(doc: jsPDF, title: string, y: number, margin: number): number {
   doc.setTextColor(60, 70, 90);
   doc.text(title.toUpperCase(), margin, y);
   doc.setDrawColor(230, 234, 242);
-  doc.line(margin + doc.getTextWidth(title.toUpperCase()) + 12, y - 3, doc.internal.pageSize.getWidth() - margin, y - 3);
+  doc.line(
+    margin + doc.getTextWidth(title.toUpperCase()) + 12,
+    y - 3,
+    doc.internal.pageSize.getWidth() - margin,
+    y - 3,
+  );
   return y + 16;
 }
 

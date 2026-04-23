@@ -12,12 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type {
-  SimulationResult,
-  ValidationIssue,
-  WorkflowEdge,
-  WorkflowNode,
-} from "./types";
+import type { SimulationResult, ValidationIssue, WorkflowEdge, WorkflowNode } from "./types";
 import { simulateWorkflow } from "./mockApi";
 import { validateWorkflow } from "./validation";
 import { exportSimulationPdf } from "./pdfExport";
@@ -84,9 +79,7 @@ export function SandboxPanel({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Workflow sandbox</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Simulate execution with mock data.
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Simulate execution with mock data.</p>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -121,12 +114,7 @@ export function SandboxPanel({
           <Stat label="Edges" value={edges.length} />
         </div>
         {result && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3 w-full"
-            onClick={exportPdf}
-          >
+          <Button variant="outline" size="sm" className="mt-3 w-full" onClick={exportPdf}>
             <FileText className="mr-2 h-4 w-4" /> Export PDF report
           </Button>
         )}
@@ -190,9 +178,7 @@ export function SandboxPanel({
                       )}
                     />
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        {s.title}
-                      </span>
+                      <span className="text-sm font-medium text-foreground">{s.title}</span>
                       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         {s.nodeKind}
                       </span>
@@ -218,8 +204,7 @@ export function SandboxPanel({
           <div className="flex h-full flex-col items-center justify-center gap-2 py-12 text-center">
             <CheckCircle2 className="h-8 w-8 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
-              Click <span className="font-medium">Run simulation</span> to test
-              your workflow.
+              Click <span className="font-medium">Run simulation</span> to test your workflow.
             </p>
           </div>
         )}
@@ -231,9 +216,7 @@ export function SandboxPanel({
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-border bg-secondary/40 px-2.5 py-1.5">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="text-sm font-semibold text-foreground">{value}</div>
     </div>
   );

@@ -2,14 +2,7 @@
  * Auth context — wraps Supabase's session state and exposes it to the app.
  * Pattern: subscribe to onAuthStateChange BEFORE the initial getSession().
  */
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -66,7 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           redirect_uri: window.location.origin,
         });
         if (result.error) {
-          return { error: result.error instanceof Error ? result.error.message : String(result.error) };
+          return {
+            error: result.error instanceof Error ? result.error.message : String(result.error),
+          };
         }
         return { error: null };
       },

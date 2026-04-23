@@ -4,17 +4,13 @@ import type { ValidationIssue, WorkflowEdge, WorkflowNode } from "./types";
  * Static validation of the workflow graph. Surfaces issues to the sandbox
  * panel and (in future) to per-node badges.
  */
-export function validateWorkflow(
-  nodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-): ValidationIssue[] {
+export function validateWorkflow(nodes: WorkflowNode[], edges: WorkflowEdge[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   const starts = nodes.filter((n) => n.data.kind === "start");
   const ends = nodes.filter((n) => n.data.kind === "end");
 
-  if (starts.length === 0)
-    issues.push({ level: "error", message: "Workflow needs a Start node." });
+  if (starts.length === 0) issues.push({ level: "error", message: "Workflow needs a Start node." });
   if (starts.length > 1)
     issues.push({
       level: "error",

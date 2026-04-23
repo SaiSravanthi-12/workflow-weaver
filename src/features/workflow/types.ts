@@ -7,12 +7,7 @@
  */
 import type { Node, Edge } from "@xyflow/react";
 
-export type NodeKind =
-  | "start"
-  | "task"
-  | "approval"
-  | "automated"
-  | "end";
+export type NodeKind = "start" | "task" | "approval" | "automated" | "end";
 
 export interface KeyValue {
   id: string;

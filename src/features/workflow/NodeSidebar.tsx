@@ -1,11 +1,4 @@
-import {
-  PlayCircle,
-  CheckSquare,
-  ShieldCheck,
-  Zap,
-  Flag,
-  type LucideIcon,
-} from "lucide-react";
+import { PlayCircle, CheckSquare, ShieldCheck, Zap, Flag, type LucideIcon } from "lucide-react";
 import type { NodeKind } from "./types";
 import { NODE_DESCRIPTIONS, NODE_LABELS } from "./defaults";
 
@@ -63,9 +56,7 @@ export function NodeSidebar({ onAdd }: SidebarProps) {
                 <Icon size={18} />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">
-                  {NODE_LABELS[kind]}
-                </div>
+                <div className="text-sm font-medium text-foreground">{NODE_LABELS[kind]}</div>
                 <div className="truncate text-xs text-muted-foreground">
                   {NODE_DESCRIPTIONS[kind]}
                 </div>
@@ -75,8 +66,7 @@ export function NodeSidebar({ onAdd }: SidebarProps) {
         })}
       </div>
       <div className="border-t border-border px-4 py-3 text-[11px] leading-relaxed text-muted-foreground">
-        Tip: Connect nodes by dragging from the bottom handle to the top handle
-        of the next node.
+        Tip: Connect nodes by dragging from the bottom handle to the top handle of the next node.
       </div>
     </aside>
   );

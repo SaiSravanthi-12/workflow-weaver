@@ -13,6 +13,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WIdRouteImport } from './routes/w.$id'
+import { Route as ApiSimulateRouteImport } from './routes/api.simulate'
+import { Route as ApiAutomationsRouteImport } from './routes/api.automations'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -34,17 +36,31 @@ const WIdRoute = WIdRouteImport.update({
   path: '/w/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSimulateRoute = ApiSimulateRouteImport.update({
+  id: '/api/simulate',
+  path: '/api/simulate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAutomationsRoute = ApiAutomationsRouteImport.update({
+  id: '/api/automations',
+  path: '/api/automations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/api/automations': typeof ApiAutomationsRoute
+  '/api/simulate': typeof ApiSimulateRoute
   '/w/$id': typeof WIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/api/automations': typeof ApiAutomationsRoute
+  '/api/simulate': typeof ApiSimulateRoute
   '/w/$id': typeof WIdRoute
 }
 export interface FileRoutesById {
@@ -52,20 +68,43 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/api/automations': typeof ApiAutomationsRoute
+  '/api/simulate': typeof ApiSimulateRoute
   '/w/$id': typeof WIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/library' | '/login' | '/w/$id'
+  fullPaths:
+    | '/'
+    | '/library'
+    | '/login'
+    | '/api/automations'
+    | '/api/simulate'
+    | '/w/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/library' | '/login' | '/w/$id'
-  id: '__root__' | '/' | '/library' | '/login' | '/w/$id'
+  to:
+    | '/'
+    | '/library'
+    | '/login'
+    | '/api/automations'
+    | '/api/simulate'
+    | '/w/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/library'
+    | '/login'
+    | '/api/automations'
+    | '/api/simulate'
+    | '/w/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
+  ApiAutomationsRoute: typeof ApiAutomationsRoute
+  ApiSimulateRoute: typeof ApiSimulateRoute
   WIdRoute: typeof WIdRoute
 }
 
@@ -99,6 +138,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/simulate': {
+      id: '/api/simulate'
+      path: '/api/simulate'
+      fullPath: '/api/simulate'
+      preLoaderRoute: typeof ApiSimulateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/automations': {
+      id: '/api/automations'
+      path: '/api/automations'
+      fullPath: '/api/automations'
+      preLoaderRoute: typeof ApiAutomationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,8 +159,19 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
+  ApiAutomationsRoute: ApiAutomationsRoute,
+  ApiSimulateRoute: ApiSimulateRoute,
   WIdRoute: WIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
