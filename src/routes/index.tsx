@@ -1,26 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { WorkflowDesigner } from "@/features/workflow/WorkflowDesigner";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "HR Workflow Designer" },
+      {
+        name: "description",
+        content:
+          "Visually design and simulate HR workflows — onboarding, leave approval, document verification — with a React Flow canvas, configurable nodes, and a mock execution sandbox.",
+      },
+      { property: "og:title", content: "HR Workflow Designer" },
+      {
+        property: "og:description",
+        content:
+          "A React Flow prototype for designing and simulating HR workflows.",
+      },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  return <WorkflowDesigner />;
 }
