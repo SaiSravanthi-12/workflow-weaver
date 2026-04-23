@@ -142,5 +142,51 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-feature-settings: "cv11", "ss01";
   }
+}
+
+/* React Flow theming */
+.react-flow__renderer,
+.react-flow__background {
+  background-color: var(--canvas-bg);
+}
+.react-flow__edge-path {
+  stroke: oklch(0.7 0.02 260);
+  stroke-width: 1.75;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--primary);
+  stroke-width: 2.25;
+}
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--card);
+  border: 2px solid oklch(0.7 0.03 260);
+  border-radius: 9999px;
+}
+.react-flow__handle:hover {
+  border-color: var(--primary);
+}
+.react-flow__controls {
+  box-shadow: var(--shadow-panel);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.react-flow__controls-button {
+  background: var(--card);
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
+}
+.react-flow__minimap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.react-flow__attribution {
+  display: none;
 }
