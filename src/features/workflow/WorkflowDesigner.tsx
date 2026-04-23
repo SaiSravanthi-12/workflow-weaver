@@ -9,7 +9,6 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
-  useReactFlow,
   type Connection,
   type OnConnect,
   type ReactFlowInstance,
@@ -203,8 +202,9 @@ function Inner({ workflowId }: DesignerProps) {
       setNodes((ns) => ns.filter((n) => n.id !== id));
       setEdges((es) => es.filter((e) => e.source !== id && e.target !== id));
       setComments((c) => {
-        const { [id]: _, ...rest } = c;
-        return rest;
+        const next = { ...c };
+        delete next[id];
+        return next;
       });
       setSelectedId((cur) => (cur === id ? null : cur));
     },
