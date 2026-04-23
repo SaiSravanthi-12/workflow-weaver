@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Zap,
   Flag,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 
