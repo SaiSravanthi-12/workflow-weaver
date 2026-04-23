@@ -35,6 +35,7 @@ interface NodeShellProps {
   showSource?: boolean;
   showTarget?: boolean;
   badge?: string;
+  comment?: string;
 }
 
 function NodeShell({
@@ -45,18 +46,29 @@ function NodeShell({
   showSource = true,
   showTarget = true,
   badge,
+  comment,
 }: NodeShellProps) {
   const Icon = ICONS[kind];
+  const hasComment = !!comment && comment.trim().length > 0;
   return (
     <div
       className={cn(
-        "group min-w-[220px] max-w-[260px] rounded-xl border bg-card text-card-foreground transition-all",
+        "group relative min-w-[220px] max-w-[260px] rounded-xl border bg-card text-card-foreground transition-all",
         "shadow-[var(--shadow-node)]",
         selected
           ? "border-primary shadow-[var(--shadow-node-selected)]"
           : "border-border hover:border-foreground/20",
       )}
     >
+      {hasComment && (
+        <div
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-5 items-center gap-0.5 rounded-full bg-[var(--node-approval)] px-1.5 text-[10px] font-semibold text-white shadow-sm ring-2 ring-card"
+          title={comment}
+        >
+          <MessageSquare className="h-2.5 w-2.5" />
+          <span>1</span>
+        </div>
+      )}
       {showTarget && <Handle type="target" position={Position.Top} />}
       <div className="flex items-start gap-3 p-3">
         <div
@@ -88,6 +100,14 @@ function NodeShell({
           )}
         </div>
       </div>
+      {hasComment && (
+        <div className="flex items-start gap-1.5 border-t border-dashed border-border bg-secondary/40 px-3 py-1.5">
+          <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+            {comment}
+          </p>
+        </div>
+      )}
       {showSource && <Handle type="source" position={Position.Bottom} />}
     </div>
   );
@@ -106,6 +126,7 @@ export function StartNode({ data, selected }: Props) {
         data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"
       }
       showTarget={false}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -123,6 +144,7 @@ export function TaskNode({ data, selected }: Props) {
           : data.description || "Human task"
       }
       badge={data.dueDate || undefined}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -140,6 +162,7 @@ export function ApprovalNode({ data, selected }: Props) {
           ? `auto < ${data.autoApproveThreshold}`
           : undefined
       }
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -152,6 +175,7 @@ export function AutomatedNode({ data, selected }: Props) {
       selected={!!selected}
       title={data.title}
       subtitle={data.actionId ? data.actionId : "No action selected"}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
@@ -166,6 +190,7 @@ export function EndNode({ data, selected }: Props) {
       subtitle={data.message}
       showSource={false}
       badge={data.summary ? "summary" : undefined}
+      comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );
 }
