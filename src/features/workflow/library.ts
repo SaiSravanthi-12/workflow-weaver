@@ -5,13 +5,44 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { WorkflowEdge, WorkflowNode } from "./types";
 
+export interface WorkflowGraph {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  comments?: Record<string, string>;
+}
+
 export interface SavedWorkflow {
   id: string;
   name: string;
   description: string | null;
-  graph: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; comments?: Record<string, string> };
+  graph: WorkflowGraph;
   created_at: string;
   updated_at: string;
+}
+
+interface DbRow {
+  id: string;
+  name: string;
+  description: string | null;
+  graph: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+function toSaved(row: DbRow): SavedWorkflow {
+  const graph = (row.graph ?? { nodes: [], edges: [], comments: {} }) as WorkflowGraph;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    graph: {
+      nodes: Array.isArray(graph.nodes) ? graph.nodes : [],
+      edges: Array.isArray(graph.edges) ? graph.edges : [],
+      comments: graph.comments ?? {},
+    },
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 export async function listWorkflows(): Promise<SavedWorkflow[]> {
@@ -20,7 +51,7 @@ export async function listWorkflows(): Promise<SavedWorkflow[]> {
     .select("id,name,description,graph,created_at,updated_at")
     .order("updated_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as SavedWorkflow[];
+  return ((data ?? []) as unknown as DbRow[]).map(toSaved);
 }
 
 export async function getWorkflow(id: string): Promise<SavedWorkflow> {
@@ -30,7 +61,7 @@ export async function getWorkflow(id: string): Promise<SavedWorkflow> {
     .eq("id", id)
     .single();
   if (error) throw error;
-  return data as SavedWorkflow;
+  return toSaved(data as unknown as DbRow);
 }
 
 export async function createWorkflow(input: {
@@ -42,18 +73,23 @@ export async function createWorkflow(input: {
 }): Promise<SavedWorkflow> {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("Not authenticated");
+  const payload = {
+    user_id: userData.user.id,
+    name: input.name,
+    description: input.description ?? null,
+    graph: {
+      nodes: input.nodes,
+      edges: input.edges,
+      comments: input.comments ?? {},
+    } as unknown,
+  };
   const { data, error } = await supabase
     .from("workflows")
-    .insert({
-      user_id: userData.user.id,
-      name: input.name,
-      description: input.description ?? null,
-      graph: { nodes: input.nodes, edges: input.edges, comments: input.comments ?? {} },
-    })
+    .insert(payload as never)
     .select()
     .single();
   if (error) throw error;
-  return data as SavedWorkflow;
+  return toSaved(data as unknown as DbRow);
 }
 
 export async function updateWorkflow(
@@ -70,16 +106,20 @@ export async function updateWorkflow(
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.nodes && patch.edges) {
-    update.graph = { nodes: patch.nodes, edges: patch.edges, comments: patch.comments ?? {} };
+    update.graph = {
+      nodes: patch.nodes,
+      edges: patch.edges,
+      comments: patch.comments ?? {},
+    };
   }
   const { data, error } = await supabase
     .from("workflows")
-    .update(update)
+    .update(update as never)
     .eq("id", id)
     .select()
     .single();
   if (error) throw error;
-  return data as SavedWorkflow;
+  return toSaved(data as unknown as DbRow);
 }
 
 export async function deleteWorkflow(id: string): Promise<void> {
