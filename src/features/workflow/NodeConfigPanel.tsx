@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Trash2, X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,33 +19,37 @@ import type {
 } from "./types";
 import { KVEditor } from "./KVEditor";
 import { NODE_LABELS } from "./defaults";
+import { validateNodeData, type FieldErrors } from "./schemas";
 
 interface ConfigPanelProps {
   node: WorkflowNode | null;
   automations: AutomationDefinition[];
+  comment: string;
   onChange: (id: string, data: WorkflowNodeData) => void;
+  onCommentChange: (id: string, comment: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
 
-/**
- * Side panel that renders the right form for the selected node's `kind`.
- * Each form is a controlled component bound to node.data via onChange.
- */
 export function NodeConfigPanel({
   node,
   automations,
+  comment,
   onChange,
+  onCommentChange,
   onDelete,
   onClose,
 }: ConfigPanelProps) {
+  const errors = useMemo<FieldErrors>(
+    () => (node ? validateNodeData(node.data.kind, node.data) : {}),
+    [node],
+  );
+
   if (!node) {
     return (
       <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            Node properties
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">Node properties</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Select a node to edit its configuration.
           </p>
@@ -66,46 +70,39 @@ export function NodeConfigPanel({
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {NODE_LABELS[kind]} node
           </div>
-          <h2 className="text-sm font-semibold text-foreground">
-            Edit properties
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">Edit properties</h2>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={onClose}
-        >
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       <div className="flex-1 space-y-5 overflow-auto p-4">
         {kind === "start" && (
-          <StartForm
-            data={node.data}
-            onChange={(d) => onChange(node.id, d)}
-          />
+          <StartForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
         {kind === "task" && (
-          <TaskForm data={node.data} onChange={(d) => onChange(node.id, d)} />
+          <TaskForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
         {kind === "approval" && (
-          <ApprovalForm
-            data={node.data}
-            onChange={(d) => onChange(node.id, d)}
-          />
+          <ApprovalForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
         {kind === "automated" && (
           <AutomatedForm
             data={node.data}
+            errors={errors}
             automations={automations}
             onChange={(d) => onChange(node.id, d)}
           />
         )}
         {kind === "end" && (
-          <EndForm data={node.data} onChange={(d) => onChange(node.id, d)} />
+          <EndForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
+
+        <CommentField
+          value={comment}
+          onChange={(v) => onCommentChange(node.id, v)}
+        />
       </div>
 
       <div className="border-t border-border p-3">
@@ -121,15 +118,17 @@ export function NodeConfigPanel({
   );
 }
 
-/* ----------------------------- Per-kind forms ----------------------------- */
+/* ----------------------------- Form primitives ---------------------------- */
 
 function Field({
   label,
   required,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -139,20 +138,51 @@ function Field({
         {required && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
       {children}
+      {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
     </div>
   );
 }
 
+function CommentField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5 rounded-lg border border-dashed border-border bg-secondary/30 p-3">
+      <Label className="flex items-center text-xs font-medium text-foreground">
+        <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
+        Notes / comment
+      </Label>
+      <Textarea
+        rows={2}
+        placeholder="Leave a note for review during simulation or editing…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="text-[10px] text-muted-foreground">
+        Visible on the node and in the simulation log.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------ Per-kind forms ---------------------------- */
+
 function StartForm({
   data,
+  errors,
   onChange,
 }: {
   data: Extract<WorkflowNodeData, { kind: "start" }>;
+  errors: FieldErrors;
   onChange: (d: WorkflowNodeData) => void;
 }) {
   return (
     <>
-      <Field label="Start title" required>
+      <Field label="Start title" required error={errors.title}>
         <Input
           value={data.title}
           onChange={(e) => onChange({ ...data, title: e.target.value })}
@@ -169,34 +199,36 @@ function StartForm({
 
 function TaskForm({
   data,
+  errors,
   onChange,
 }: {
   data: Extract<WorkflowNodeData, { kind: "task" }>;
+  errors: FieldErrors;
   onChange: (d: WorkflowNodeData) => void;
 }) {
   return (
     <>
-      <Field label="Title" required>
+      <Field label="Title" required error={errors.title}>
         <Input
           value={data.title}
           onChange={(e) => onChange({ ...data, title: e.target.value })}
         />
       </Field>
-      <Field label="Description">
+      <Field label="Description" error={errors.description}>
         <Textarea
           rows={3}
           value={data.description}
           onChange={(e) => onChange({ ...data, description: e.target.value })}
         />
       </Field>
-      <Field label="Assignee">
+      <Field label="Assignee" error={errors.assignee}>
         <Input
           placeholder="e.g. jane.doe@company.com"
           value={data.assignee}
           onChange={(e) => onChange({ ...data, assignee: e.target.value })}
         />
       </Field>
-      <Field label="Due date">
+      <Field label="Due date" error={errors.dueDate}>
         <Input
           type="date"
           value={data.dueDate}
@@ -214,25 +246,25 @@ function TaskForm({
 
 function ApprovalForm({
   data,
+  errors,
   onChange,
 }: {
   data: Extract<WorkflowNodeData, { kind: "approval" }>;
+  errors: FieldErrors;
   onChange: (d: WorkflowNodeData) => void;
 }) {
   return (
     <>
-      <Field label="Title" required>
+      <Field label="Title" required error={errors.title}>
         <Input
           value={data.title}
           onChange={(e) => onChange({ ...data, title: e.target.value })}
         />
       </Field>
-      <Field label="Approver role">
+      <Field label="Approver role" error={errors.approverRole}>
         <Select
           value={data.approverRole}
-          onValueChange={(approverRole) =>
-            onChange({ ...data, approverRole })
-          }
+          onValueChange={(approverRole) => onChange({ ...data, approverRole })}
         >
           <SelectTrigger>
             <SelectValue />
@@ -246,7 +278,7 @@ function ApprovalForm({
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Auto-approve threshold">
+      <Field label="Auto-approve threshold" error={errors.autoApproveThreshold}>
         <Input
           type="number"
           min={0}
@@ -265,28 +297,28 @@ function ApprovalForm({
 
 function AutomatedForm({
   data,
+  errors,
   automations,
   onChange,
 }: {
   data: Extract<WorkflowNodeData, { kind: "automated" }>;
+  errors: FieldErrors;
   automations: AutomationDefinition[];
   onChange: (d: WorkflowNodeData) => void;
 }) {
   const action = automations.find((a) => a.id === data.actionId);
-
-  // Reset params when action changes so we never carry stale fields.
   const [touched, setTouched] = useState(data.actionId);
   useEffect(() => setTouched(data.actionId), [data.actionId]);
 
   return (
     <>
-      <Field label="Title" required>
+      <Field label="Title" required error={errors.title}>
         <Input
           value={data.title}
           onChange={(e) => onChange({ ...data, title: e.target.value })}
         />
       </Field>
-      <Field label="Action" required>
+      <Field label="Action" required error={errors.actionId}>
         <Select
           value={data.actionId || undefined}
           onValueChange={(actionId) => {
@@ -311,16 +343,14 @@ function AutomatedForm({
 
       {action && touched && (
         <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
-          <div className="text-xs font-medium text-foreground">
-            Action parameters
-          </div>
+          <div className="text-xs font-medium text-foreground">Action parameters</div>
           {action.params.length === 0 && (
             <p className="text-xs text-muted-foreground">
               This action takes no parameters.
             </p>
           )}
           {action.params.map((p) => (
-            <Field key={p} label={p}>
+            <Field key={p} label={p} error={errors[`params.${p}`]}>
               <Input
                 value={data.params[p] ?? ""}
                 onChange={(e) =>
@@ -340,14 +370,16 @@ function AutomatedForm({
 
 function EndForm({
   data,
+  errors,
   onChange,
 }: {
   data: Extract<WorkflowNodeData, { kind: "end" }>;
+  errors: FieldErrors;
   onChange: (d: WorkflowNodeData) => void;
 }) {
   return (
     <>
-      <Field label="End message">
+      <Field label="End message" required error={errors.message}>
         <Textarea
           rows={3}
           value={data.message}
@@ -356,9 +388,7 @@ function EndForm({
       </Field>
       <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 p-3">
         <div>
-          <div className="text-sm font-medium text-foreground">
-            Generate summary
-          </div>
+          <div className="text-sm font-medium text-foreground">Generate summary</div>
           <div className="text-xs text-muted-foreground">
             Compile a recap when the workflow completes.
           </div>

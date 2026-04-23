@@ -20,6 +20,11 @@ export interface KeyValue {
   value: string;
 }
 
+/** Per-node author note. Stored alongside data so it serializes naturally. */
+export interface WithComment {
+  comment?: string;
+}
+
 export interface StartNodeData {
   kind: "start";
   title: string;

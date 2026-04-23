@@ -7,6 +7,8 @@ import {
   XCircle,
   Loader2,
   Download,
+  FileText,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,19 +20,24 @@ import type {
 } from "./types";
 import { simulateWorkflow } from "./mockApi";
 import { validateWorkflow } from "./validation";
+import { exportSimulationPdf } from "./pdfExport";
 
 interface SandboxPanelProps {
   open: boolean;
   onClose: () => void;
+  workflowName: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  comments: Record<string, string>;
 }
 
 export function SandboxPanel({
   open,
   onClose,
+  workflowName,
   nodes,
   edges,
+  comments,
 }: SandboxPanelProps) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -53,7 +60,7 @@ export function SandboxPanel({
   };
 
   const exportJson = () => {
-    const data = JSON.stringify({ nodes, edges }, null, 2);
+    const data = JSON.stringify({ nodes, edges, comments }, null, 2);
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -63,13 +70,20 @@ export function SandboxPanel({
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = () => {
+    if (!result) return;
+    exportSimulationPdf({
+      workflowName: workflowName || "Untitled workflow",
+      result,
+      issues,
+    });
+  };
+
   return (
     <div className="absolute inset-y-0 right-0 z-20 flex w-[420px] flex-col border-l border-border bg-card shadow-[var(--shadow-panel)]">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">
-            Workflow sandbox
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">Workflow sandbox</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Simulate execution with mock data.
           </p>
@@ -84,12 +98,7 @@ export function SandboxPanel({
           >
             <Download className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onClose}
-          >
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -111,6 +120,16 @@ export function SandboxPanel({
           <Stat label="Nodes" value={nodes.length} />
           <Stat label="Edges" value={edges.length} />
         </div>
+        {result && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={exportPdf}
+          >
+            <FileText className="mr-2 h-4 w-4" /> Export PDF report
+          </Button>
+        )}
       </div>
 
       <div className="flex-1 space-y-4 overflow-auto p-4">
@@ -156,32 +175,41 @@ export function SandboxPanel({
               </span>
             </SectionTitle>
             <ol className="relative ml-2 space-y-3 border-l border-border pl-4">
-              {result.steps.map((s, i) => (
-                <li key={`${s.nodeId}-${i}`} className="relative">
-                  <span
-                    className={cn(
-                      "absolute -left-[21px] top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card",
-                      s.status === "ok"
-                        ? "bg-[var(--node-start)]"
-                        : s.status === "warn"
-                          ? "bg-[var(--node-approval)]"
-                          : "bg-destructive",
+              {result.steps.map((s, i) => {
+                const note = comments[s.nodeId];
+                return (
+                  <li key={`${s.nodeId}-${i}`} className="relative">
+                    <span
+                      className={cn(
+                        "absolute -left-[21px] top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card",
+                        s.status === "ok"
+                          ? "bg-[var(--node-start)]"
+                          : s.status === "warn"
+                            ? "bg-[var(--node-approval)]"
+                            : "bg-destructive",
+                      )}
+                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">
+                        {s.title}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {s.nodeKind}
+                      </span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {s.durationMs}ms
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{s.message}</p>
+                    {note && (
+                      <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-dashed border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+                        <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span>{note}</span>
+                      </div>
                     )}
-                  />
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">
-                      {s.title}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {s.nodeKind}
-                    </span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {s.durationMs}ms
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{s.message}</p>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           </section>
         )}
