@@ -112,6 +112,23 @@ function Inner({ workflowId }: DesignerProps) {
     return () => clearTimeout(t);
   }, [nodes, edges, comments, hydrated]);
 
+  // Mirror comments into node.data so node renderers can show the badge
+  // without prop-drilling. Skipped when nothing actually changes to avoid
+  // an infinite render loop with React Flow's internal state.
+  useEffect(() => {
+    setNodes((ns) => {
+      let changed = false;
+      const next = ns.map((n) => {
+        const desired = comments[n.id] ?? "";
+        const current = (n.data as { comment?: string }).comment ?? "";
+        if (desired === current) return n;
+        changed = true;
+        return { ...n, data: { ...n.data, comment: desired } as typeof n.data };
+      });
+      return changed ? next : ns;
+    });
+  }, [comments, setNodes]);
+
   // Cmd/Ctrl+K -> palette
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
