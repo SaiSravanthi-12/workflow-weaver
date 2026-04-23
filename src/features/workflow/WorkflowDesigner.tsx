@@ -143,9 +143,7 @@ function Inner({ workflowId }: DesignerProps) {
 
   const onConnect: OnConnect = useCallback(
     (params: Connection) =>
-      setEdges((eds) =>
-        addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds),
-      ),
+      setEdges((eds) => addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds)),
     [setEdges],
   );
 
@@ -156,15 +154,12 @@ function Inner({ workflowId }: DesignerProps) {
         return;
       }
       const id = uid(kind);
-      const pos =
-        position ??
+      const pos = position ??
         rfRef.current?.screenToFlowPosition({
           x: window.innerWidth / 2,
           y: window.innerHeight / 2,
         }) ?? { x: 240, y: 200 };
-      setNodes((ns) =>
-        ns.concat({ id, type: kind, position: pos, data: defaultDataFor(kind) }),
-      );
+      setNodes((ns) => ns.concat({ id, type: kind, position: pos, data: defaultDataFor(kind) }));
       setSelectedId(id);
     },
     [nodes, setNodes],
@@ -185,9 +180,7 @@ function Inner({ workflowId }: DesignerProps) {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      const kind = event.dataTransfer.getData(
-        "application/x-workflow-node",
-      ) as NodeKind;
+      const kind = event.dataTransfer.getData("application/x-workflow-node") as NodeKind;
       if (!kind) return;
       const position = rfRef.current?.screenToFlowPosition({
         x: event.clientX,
@@ -313,12 +306,7 @@ function Inner({ workflowId }: DesignerProps) {
               <Button size="sm" variant="outline" onClick={handleSave}>
                 <Save className="mr-1.5 h-3.5 w-3.5" /> Save
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => auth.signOut()}
-                title="Sign out"
-              >
+              <Button size="sm" variant="ghost" onClick={() => auth.signOut()} title="Sign out">
                 <LogOut className="h-3.5 w-3.5" />
               </Button>
             </>
@@ -360,7 +348,12 @@ function Inner({ workflowId }: DesignerProps) {
             defaultEdgeOptions={{ animated: true }}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Background variant={BackgroundVariant.Dots} gap={18} size={1.2} color="var(--canvas-dot)" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={18}
+              size={1.2}
+              color="var(--canvas-dot)"
+            />
             <Controls showInteractive={false} />
             <MiniMap
               pannable
@@ -368,12 +361,18 @@ function Inner({ workflowId }: DesignerProps) {
               nodeColor={(n) => {
                 const kind = (n.data as WorkflowNodeData | undefined)?.kind;
                 switch (kind) {
-                  case "start": return "oklch(0.62 0.18 155)";
-                  case "task": return "oklch(0.6 0.17 250)";
-                  case "approval": return "oklch(0.65 0.18 50)";
-                  case "automated": return "oklch(0.6 0.2 295)";
-                  case "end": return "oklch(0.55 0.05 260)";
-                  default: return "oklch(0.7 0.02 260)";
+                  case "start":
+                    return "oklch(0.62 0.18 155)";
+                  case "task":
+                    return "oklch(0.6 0.17 250)";
+                  case "approval":
+                    return "oklch(0.65 0.18 50)";
+                  case "automated":
+                    return "oklch(0.6 0.2 295)";
+                  case "end":
+                    return "oklch(0.55 0.05 260)";
+                  default:
+                    return "oklch(0.7 0.02 260)";
                 }
               }}
             />

@@ -8,12 +8,7 @@
  * The file name is preserved for compatibility with existing imports;
  * functionally this is now a thin HTTP client, not a mock.
  */
-import type {
-  AutomationDefinition,
-  SimulationResult,
-  WorkflowEdge,
-  WorkflowNode,
-} from "./types";
+import type { AutomationDefinition, SimulationResult, WorkflowEdge, WorkflowNode } from "./types";
 
 export async function getAutomations(): Promise<AutomationDefinition[]> {
   const res = await fetch("/api/automations", {
@@ -31,9 +26,7 @@ interface SimulatePayload {
   edges: WorkflowEdge[];
 }
 
-export async function simulateWorkflow(
-  payload: SimulatePayload,
-): Promise<SimulationResult> {
+export async function simulateWorkflow(payload: SimulatePayload): Promise<SimulationResult> {
   // Trim to the shape the API needs — keeps the request small and avoids
   // sending React Flow internal fields like `position`, `selected`, etc.
   const body = {

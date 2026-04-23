@@ -8,14 +8,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import {
-  PlayCircle,
-  CheckSquare,
-  ShieldCheck,
-  Zap,
-  Flag,
-  FileText,
-} from "lucide-react";
+import { PlayCircle, CheckSquare, ShieldCheck, Zap, Flag, FileText } from "lucide-react";
 import type { NodeKind, WorkflowEdge, WorkflowNode } from "./types";
 import { templates } from "./templates";
 import { NODE_DESCRIPTIONS, NODE_LABELS } from "./defaults";
@@ -43,10 +36,7 @@ export function CommandPalette({ open, onOpenChange, onAddNode, onApplyTemplate 
   }, [open]);
 
   // Global Cmd/Ctrl+K opener — bound at module consumer level too, but ensure here.
-  const kinds = useMemo<NodeKind[]>(
-    () => ["start", "task", "approval", "automated", "end"],
-    [],
-  );
+  const kinds = useMemo<NodeKind[]>(() => ["start", "task", "approval", "automated", "end"], []);
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -94,9 +84,7 @@ export function CommandPalette({ open, onOpenChange, onAddNode, onApplyTemplate 
             >
               <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>{t.label}</span>
-              <span className="ml-auto text-xs text-muted-foreground">
-                {t.description}
-              </span>
+              <span className="ml-auto text-xs text-muted-foreground">{t.description}</span>
             </CommandItem>
           ))}
         </CommandGroup>

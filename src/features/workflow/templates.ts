@@ -36,20 +36,32 @@ export const templates: Template[] = [
     description: "Start → collect docs → IT account → manager intro → end",
     build: () => {
       const start = node("start", { x: 280, y: 40 }, { title: "New hire onboarding" });
-      const docs = node("task", { x: 280, y: 180 }, {
-        title: "Collect joining documents",
-        description: "ID, tax forms, bank details",
-        assignee: "hr.ops@company.com",
-      });
-      const it = node("automated", { x: 280, y: 340 }, {
-        title: "Provision IT account",
-        actionId: "create_account",
-        params: { employeeId: "{{employee.id}}", department: "{{employee.dept}}" },
-      });
-      const intro = node("task", { x: 280, y: 500 }, {
-        title: "Manager 1:1 intro",
-        assignee: "manager",
-      });
+      const docs = node(
+        "task",
+        { x: 280, y: 180 },
+        {
+          title: "Collect joining documents",
+          description: "ID, tax forms, bank details",
+          assignee: "hr.ops@company.com",
+        },
+      );
+      const it = node(
+        "automated",
+        { x: 280, y: 340 },
+        {
+          title: "Provision IT account",
+          actionId: "create_account",
+          params: { employeeId: "{{employee.id}}", department: "{{employee.dept}}" },
+        },
+      );
+      const intro = node(
+        "task",
+        { x: 280, y: 500 },
+        {
+          title: "Manager 1:1 intro",
+          assignee: "manager",
+        },
+      );
       const end = node("end", { x: 280, y: 660 }, { message: "Onboarding complete" });
       return {
         nodes: [start, docs, it, intro, end],
@@ -68,20 +80,32 @@ export const templates: Template[] = [
     description: "Submit → manager approval → HR notify → end",
     build: () => {
       const start = node("start", { x: 280, y: 40 }, { title: "Leave request" });
-      const submit = node("task", { x: 280, y: 180 }, {
-        title: "Submit leave request",
-        assignee: "employee",
-      });
-      const approve = node("approval", { x: 280, y: 340 }, {
-        title: "Manager approval",
-        approverRole: "Manager",
-        autoApproveThreshold: 2,
-      });
-      const notify = node("automated", { x: 280, y: 500 }, {
-        title: "Notify HR",
-        actionId: "send_email",
-        params: { to: "hr@company.com", subject: "Leave approved", body: "" },
-      });
+      const submit = node(
+        "task",
+        { x: 280, y: 180 },
+        {
+          title: "Submit leave request",
+          assignee: "employee",
+        },
+      );
+      const approve = node(
+        "approval",
+        { x: 280, y: 340 },
+        {
+          title: "Manager approval",
+          approverRole: "Manager",
+          autoApproveThreshold: 2,
+        },
+      );
+      const notify = node(
+        "automated",
+        { x: 280, y: 500 },
+        {
+          title: "Notify HR",
+          actionId: "send_email",
+          params: { to: "hr@company.com", subject: "Leave approved", body: "" },
+        },
+      );
       const end = node("end", { x: 280, y: 660 }, { message: "Leave processed" });
       return {
         nodes: [start, submit, approve, notify, end],
@@ -100,20 +124,32 @@ export const templates: Template[] = [
     description: "Start → upload → automated check → HRBP review → end",
     build: () => {
       const start = node("start", { x: 280, y: 40 }, { title: "Doc verification" });
-      const upload = node("task", { x: 280, y: 180 }, {
-        title: "Upload documents",
-        assignee: "candidate",
-      });
-      const check = node("automated", { x: 280, y: 340 }, {
-        title: "Generate verification report",
-        actionId: "generate_doc",
-        params: { template: "verification", recipient: "hrbp@company.com" },
-      });
-      const review = node("approval", { x: 280, y: 500 }, {
-        title: "HRBP review",
-        approverRole: "HRBP",
-        autoApproveThreshold: 0,
-      });
+      const upload = node(
+        "task",
+        { x: 280, y: 180 },
+        {
+          title: "Upload documents",
+          assignee: "candidate",
+        },
+      );
+      const check = node(
+        "automated",
+        { x: 280, y: 340 },
+        {
+          title: "Generate verification report",
+          actionId: "generate_doc",
+          params: { template: "verification", recipient: "hrbp@company.com" },
+        },
+      );
+      const review = node(
+        "approval",
+        { x: 280, y: 500 },
+        {
+          title: "HRBP review",
+          approverRole: "HRBP",
+          autoApproveThreshold: 0,
+        },
+      );
       const end = node("end", { x: 280, y: 660 }, { message: "Verification complete" });
       return {
         nodes: [start, upload, check, review, end],

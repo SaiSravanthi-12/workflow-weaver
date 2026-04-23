@@ -15,22 +15,13 @@ export function KVEditor({ label, items, onChange }: KVEditorProps) {
   const update = (id: string, patch: Partial<KeyValue>) =>
     onChange(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   const remove = (id: string) => onChange(items.filter((it) => it.id !== id));
-  const add = () =>
-    onChange([...items, { id: uid("kv"), key: "", value: "" }]);
+  const add = () => onChange([...items, { id: uid("kv"), key: "", value: "" }]);
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label className="text-xs font-medium text-muted-foreground">
-          {label}
-        </Label>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={add}
-        >
+        <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={add}>
           <Plus className="mr-1 h-3 w-3" /> Add
         </Button>
       </div>

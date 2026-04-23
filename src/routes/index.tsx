@@ -14,8 +14,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "HR Workflow Designer" },
       {
         property: "og:description",
-        content:
-          "A React Flow prototype for designing and simulating HR workflows.",
+        content: "A React Flow prototype for designing and simulating HR workflows.",
       },
     ],
   }),

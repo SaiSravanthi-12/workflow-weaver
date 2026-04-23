@@ -93,19 +93,13 @@ function NodeShell({
           <div className="truncate text-sm font-semibold text-foreground">
             {title || "Untitled"}
           </div>
-          {subtitle && (
-            <div className="truncate text-xs text-muted-foreground">
-              {subtitle}
-            </div>
-          )}
+          {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
         </div>
       </div>
       {hasComment && (
         <div className="flex items-start gap-1.5 border-t border-dashed border-border bg-secondary/40 px-3 py-1.5">
           <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
-            {comment}
-          </p>
+          <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{comment}</p>
         </div>
       )}
       {showSource && <Handle type="source" position={Position.Bottom} />}
@@ -122,9 +116,7 @@ export function StartNode({ data, selected }: Props) {
       kind="start"
       selected={!!selected}
       title={data.title}
-      subtitle={
-        data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"
-      }
+      subtitle={data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"}
       showTarget={false}
       comment={typeof data.comment === "string" ? data.comment : undefined}
     />
@@ -138,11 +130,7 @@ export function TaskNode({ data, selected }: Props) {
       kind="task"
       selected={!!selected}
       title={data.title}
-      subtitle={
-        data.assignee
-          ? `Assignee: ${data.assignee}`
-          : data.description || "Human task"
-      }
+      subtitle={data.assignee ? `Assignee: ${data.assignee}` : data.description || "Human task"}
       badge={data.dueDate || undefined}
       comment={typeof data.comment === "string" ? data.comment : undefined}
     />
@@ -157,11 +145,7 @@ export function ApprovalNode({ data, selected }: Props) {
       selected={!!selected}
       title={data.title}
       subtitle={`Approver: ${data.approverRole}`}
-      badge={
-        data.autoApproveThreshold > 0
-          ? `auto < ${data.autoApproveThreshold}`
-          : undefined
-      }
+      badge={data.autoApproveThreshold > 0 ? `auto < ${data.autoApproveThreshold}` : undefined}
       comment={typeof data.comment === "string" ? data.comment : undefined}
     />
   );

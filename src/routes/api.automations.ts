@@ -37,8 +37,7 @@ const AUTOMATIONS = [
 export const Route = createFileRoute("/api/automations")({
   server: {
     handlers: {
-      OPTIONS: async () =>
-        new Response(null, { status: 204, headers: CORS_HEADERS }),
+      OPTIONS: async () => new Response(null, { status: 204, headers: CORS_HEADERS }),
       GET: async () =>
         new Response(JSON.stringify({ automations: AUTOMATIONS }), {
           status: 200,

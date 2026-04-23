@@ -60,10 +60,7 @@ interface Step {
 }
 
 function simulateNode(node: SimNode): Step {
-  const data = node.data as { kind?: (typeof NODE_KINDS)[number] } & Record<
-    string,
-    unknown
-  >;
+  const data = node.data as { kind?: (typeof NODE_KINDS)[number] } & Record<string, unknown>;
   const kind = data.kind ?? "task";
   const durationMs = Math.round(50 + Math.random() * 200);
   const base = { nodeId: node.id, nodeKind: kind, durationMs };
@@ -145,9 +142,7 @@ function runSimulation(nodes: SimNode[], edges: { source: string; target: string
   const startedAt = new Date().toISOString();
   const steps: Step[] = [];
 
-  const start = nodes.find(
-    (n) => (n.data as { kind?: string }).kind === "start",
-  );
+  const start = nodes.find((n) => (n.data as { kind?: string }).kind === "start");
   if (!start) {
     return {
       ok: false,
@@ -210,20 +205,16 @@ function runSimulation(nodes: SimNode[], edges: { source: string; target: string
 export const Route = createFileRoute("/api/simulate")({
   server: {
     handlers: {
-      OPTIONS: async () =>
-        new Response(null, { status: 204, headers: CORS_HEADERS }),
+      OPTIONS: async () => new Response(null, { status: 204, headers: CORS_HEADERS }),
       POST: async ({ request }) => {
         let body: unknown;
         try {
           body = await request.json();
         } catch {
-          return new Response(
-            JSON.stringify({ error: "Invalid JSON body" }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-            },
-          );
+          return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          });
         }
         const parsed = SimulatePayload.safeParse(body);
         if (!parsed.success) {

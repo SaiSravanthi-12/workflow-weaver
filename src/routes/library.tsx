@@ -86,14 +86,8 @@ function LibraryPage() {
                 key={w.id}
                 className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:border-foreground/20"
               >
-                <Link
-                  to="/w/$id"
-                  params={{ id: w.id }}
-                  className="min-w-0 flex-1"
-                >
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {w.name}
-                  </div>
+                <Link to="/w/$id" params={{ id: w.id }} className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-foreground">{w.name}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {w.graph.nodes.length} nodes · {w.graph.edges.length} edges · updated{" "}
                     {new Date(w.updated_at).toLocaleString()}

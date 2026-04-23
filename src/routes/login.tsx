@@ -27,9 +27,10 @@ function LoginPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const res = mode === "signin"
-      ? await auth.signInWithPassword(email, password)
-      : await auth.signUp(email, password);
+    const res =
+      mode === "signin"
+        ? await auth.signInWithPassword(email, password)
+        : await auth.signUp(email, password);
     setBusy(false);
     if (res.error) {
       toast.error(res.error);

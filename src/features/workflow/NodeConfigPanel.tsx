@@ -12,11 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type {
-  AutomationDefinition,
-  WorkflowNode,
-  WorkflowNodeData,
-} from "./types";
+import type { AutomationDefinition, WorkflowNode, WorkflowNodeData } from "./types";
 import { KVEditor } from "./KVEditor";
 import { NODE_LABELS } from "./defaults";
 import { validateNodeData, type FieldErrors } from "./schemas";
@@ -99,10 +95,7 @@ export function NodeConfigPanel({
           <EndForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
 
-        <CommentField
-          value={comment}
-          onChange={(v) => onCommentChange(node.id, v)}
-        />
+        <CommentField value={comment} onChange={(v) => onCommentChange(node.id, v)} />
       </div>
 
       <div className="border-t border-border p-3">
@@ -143,13 +136,7 @@ function Field({
   );
 }
 
-function CommentField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function CommentField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1.5 rounded-lg border border-dashed border-border bg-secondary/30 p-3">
       <Label className="flex items-center text-xs font-medium text-foreground">
@@ -183,10 +170,7 @@ function StartForm({
   return (
     <>
       <Field label="Start title" required error={errors.title}>
-        <Input
-          value={data.title}
-          onChange={(e) => onChange({ ...data, title: e.target.value })}
-        />
+        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </Field>
       <KVEditor
         label="Metadata"
@@ -209,10 +193,7 @@ function TaskForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input
-          value={data.title}
-          onChange={(e) => onChange({ ...data, title: e.target.value })}
-        />
+        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </Field>
       <Field label="Description" error={errors.description}>
         <Textarea
@@ -256,10 +237,7 @@ function ApprovalForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input
-          value={data.title}
-          onChange={(e) => onChange({ ...data, title: e.target.value })}
-        />
+        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </Field>
       <Field label="Approver role" error={errors.approverRole}>
         <Select
@@ -313,10 +291,7 @@ function AutomatedForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input
-          value={data.title}
-          onChange={(e) => onChange({ ...data, title: e.target.value })}
-        />
+        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </Field>
       <Field label="Action" required error={errors.actionId}>
         <Select
@@ -345,9 +320,7 @@ function AutomatedForm({
         <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
           <div className="text-xs font-medium text-foreground">Action parameters</div>
           {action.params.length === 0 && (
-            <p className="text-xs text-muted-foreground">
-              This action takes no parameters.
-            </p>
+            <p className="text-xs text-muted-foreground">This action takes no parameters.</p>
           )}
           {action.params.map((p) => (
             <Field key={p} label={p} error={errors[`params.${p}`]}>
