@@ -125,8 +125,9 @@ function NodeShell({
 
 type Props = NodeProps<WorkflowNode>;
 
-function pickNotes(data: { notes?: unknown }): CommentNote[] | undefined {
-  return Array.isArray(data.notes) ? (data.notes as CommentNote[]) : undefined;
+function pickNotes(data: unknown): CommentNote[] | undefined {
+  const notes = (data as { notes?: unknown }).notes;
+  return Array.isArray(notes) ? (notes as CommentNote[]) : undefined;
 }
 
 export function StartNode({ data, selected }: Props) {
