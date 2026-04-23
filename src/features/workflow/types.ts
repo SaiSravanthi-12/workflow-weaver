@@ -15,10 +15,19 @@ export interface KeyValue {
   value: string;
 }
 
-/** Per-node author note. Stored alongside data so it serializes naturally. */
-export interface WithComment {
-  comment?: string;
+/**
+ * A single comment / annotation attached to a node. Multiple notes per node
+ * are supported so reviewer discussions don't overwrite each other.
+ */
+export interface CommentNote {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string; // ISO 8601
 }
+
+/** Map of nodeId -> ordered list of notes (oldest first). */
+export type CommentMap = Record<string, CommentNote[]>;
 
 export interface StartNodeData {
   kind: "start";
@@ -96,4 +105,11 @@ export interface ValidationIssue {
   level: "error" | "warning";
   message: string;
   nodeId?: string;
+}
+
+/** Shape used for JSON import/export and undo snapshots. */
+export interface WorkflowSnapshot {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  comments: CommentMap;
 }

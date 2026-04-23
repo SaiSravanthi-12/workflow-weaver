@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, X, MessageSquare } from "lucide-react";
+import { Trash2, X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -12,17 +13,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AutomationDefinition, WorkflowNode, WorkflowNodeData } from "./types";
+import type {
+  AutomationDefinition,
+  CommentNote,
+  WorkflowNode,
+  WorkflowNodeData,
+} from "./types";
 import { KVEditor } from "./KVEditor";
 import { NODE_LABELS } from "./defaults";
 import { validateNodeData, type FieldErrors } from "./schemas";
+import { CommentThread } from "./CommentThread";
 
 interface ConfigPanelProps {
   node: WorkflowNode | null;
   automations: AutomationDefinition[];
-  comment: string;
+  notes: CommentNote[];
+  currentAuthor: string;
   onChange: (id: string, data: WorkflowNodeData) => void;
-  onCommentChange: (id: string, comment: string) => void;
+  onAddNote: (nodeId: string, text: string) => void;
+  onRemoveNote: (nodeId: string, noteId: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
@@ -30,9 +39,11 @@ interface ConfigPanelProps {
 export function NodeConfigPanel({
   node,
   automations,
-  comment,
+  notes,
+  currentAuthor,
   onChange,
-  onCommentChange,
+  onAddNote,
+  onRemoveNote,
   onDelete,
   onClose,
 }: ConfigPanelProps) {
@@ -40,6 +51,7 @@ export function NodeConfigPanel({
     () => (node ? validateNodeData(node.data.kind, node.data) : {}),
     [node],
   );
+  const errorCount = Object.keys(errors).length;
 
   if (!node) {
     return (
@@ -63,8 +75,16 @@ export function NodeConfigPanel({
     <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card">
       <div className="flex items-start justify-between border-b border-border px-4 py-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {NODE_LABELS[kind]} node
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {NODE_LABELS[kind]} node
+            </span>
+            {errorCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
+                <AlertCircle className="h-2.5 w-2.5" />
+                {errorCount} issue{errorCount > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
           <h2 className="text-sm font-semibold text-foreground">Edit properties</h2>
         </div>
@@ -95,7 +115,12 @@ export function NodeConfigPanel({
           <EndForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
 
-        <CommentField value={comment} onChange={(v) => onCommentChange(node.id, v)} />
+        <CommentThread
+          notes={notes}
+          currentAuthor={currentAuthor}
+          onAdd={(text) => onAddNote(node.id, text)}
+          onRemove={(noteId) => onRemoveNote(node.id, noteId)}
+        />
       </div>
 
       <div className="border-t border-border p-3">
@@ -124,34 +149,36 @@ function Field({
   error?: string;
   children: React.ReactNode;
 }) {
+  const invalid = !!error;
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-foreground">
+      <Label
+        className={cn(
+          "flex items-center gap-1 text-xs font-medium",
+          invalid ? "text-destructive" : "text-foreground",
+        )}
+      >
         {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
+        {required && <span className="text-destructive">*</span>}
+        {invalid && (
+          <span
+            className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive"
+            title={error}
+          >
+            <AlertCircle className="h-2.5 w-2.5" />
+            invalid
+          </span>
+        )}
       </Label>
-      {children}
-      {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function CommentField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="space-y-1.5 rounded-lg border border-dashed border-border bg-secondary/30 p-3">
-      <Label className="flex items-center text-xs font-medium text-foreground">
-        <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-        Notes / comment
-      </Label>
-      <Textarea
-        rows={2}
-        placeholder="Leave a note for review during simulation or editing…"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <p className="text-[10px] text-muted-foreground">
-        Visible on the node and in the simulation log.
-      </p>
+      <div className={cn(invalid && "[&_input]:border-destructive [&_textarea]:border-destructive [&_button]:border-destructive")}>
+        {children}
+      </div>
+      {error && (
+        <p className="flex items-center gap-1 text-[11px] font-medium text-destructive">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -170,7 +197,10 @@ function StartForm({
   return (
     <>
       <Field label="Start title" required error={errors.title}>
-        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <Input
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
       </Field>
       <KVEditor
         label="Metadata"
@@ -193,7 +223,10 @@ function TaskForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <Input
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
       </Field>
       <Field label="Description" error={errors.description}>
         <Textarea
@@ -237,7 +270,10 @@ function ApprovalForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <Input
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
       </Field>
       <Field label="Approver role" error={errors.approverRole}>
         <Select
@@ -291,7 +327,10 @@ function AutomatedForm({
   return (
     <>
       <Field label="Title" required error={errors.title}>
-        <Input value={data.title} onChange={(e) => onChange({ ...data, title: e.target.value })} />
+        <Input
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
       </Field>
       <Field label="Action" required error={errors.actionId}>
         <Select
@@ -320,7 +359,9 @@ function AutomatedForm({
         <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
           <div className="text-xs font-medium text-foreground">Action parameters</div>
           {action.params.length === 0 && (
-            <p className="text-xs text-muted-foreground">This action takes no parameters.</p>
+            <p className="text-xs text-muted-foreground">
+              This action takes no parameters.
+            </p>
           )}
           {action.params.map((p) => (
             <Field key={p} label={p} error={errors[`params.${p}`]}>

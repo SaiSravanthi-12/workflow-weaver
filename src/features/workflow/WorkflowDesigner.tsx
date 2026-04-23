@@ -16,7 +16,20 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Play, Workflow, Sparkles, Save, FolderOpen, LogOut, LogIn, Command } from "lucide-react";
+import {
+  Play,
+  Workflow,
+  Sparkles,
+  Save,
+  FolderOpen,
+  LogOut,
+  LogIn,
+  Command,
+  Upload,
+  Undo2,
+  Redo2,
+  LayoutTemplate,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { nodeTypes } from "./nodes";
@@ -24,18 +37,24 @@ import { NodeSidebar } from "./NodeSidebar";
 import { NodeConfigPanel } from "./NodeConfigPanel";
 import { SandboxPanel } from "./SandboxPanel";
 import { CommandPalette } from "./CommandPalette";
+import { ImportDialog } from "./ImportDialog";
 import { defaultDataFor, uid } from "./defaults";
 import { getAutomations } from "./mockApi";
 import { validateWorkflow } from "./validation";
 import { loadDraft, saveDraft } from "./persistence";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { createWorkflow, getWorkflow, updateWorkflow } from "./library";
+import { addNote, removeNote } from "./comments";
+import { useHistory } from "./history";
+import { autoLayout } from "./autoLayout";
 import type {
   AutomationDefinition,
+  CommentMap,
   NodeKind,
   WorkflowEdge,
   WorkflowNode,
   WorkflowNodeData,
+  WorkflowSnapshot,
 } from "./types";
 
 interface DesignerProps {
@@ -54,11 +73,12 @@ const initialNodes: WorkflowNode[] = [
 function Inner({ workflowId }: DesignerProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
-  const [comments, setComments] = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<CommentMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [automations, setAutomations] = useState<AutomationDefinition[]>([]);
   const [sandboxOpen, setSandboxOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState("Untitled workflow");
   const [savedId, setSavedId] = useState<string | undefined>(workflowId);
   const [hydrated, setHydrated] = useState(false);
@@ -67,6 +87,12 @@ function Inner({ workflowId }: DesignerProps) {
   const navigate = useNavigate();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rfRef = useRef<ReactFlowInstance<WorkflowNode, WorkflowEdge> | null>(null);
+
+  const history = useHistory({ nodes: initialNodes, edges: [], comments: {} });
+  // Suppress history commits while we're applying an undo/redo result.
+  const suppressHistoryRef = useRef(false);
+
+  const currentAuthor = auth.user?.email ?? auth.user?.id ?? "Anonymous";
 
   // Load automations once.
   useEffect(() => {
@@ -82,10 +108,12 @@ function Inner({ workflowId }: DesignerProps) {
           const wf = await getWorkflow(workflowId);
           if (cancelled) return;
           setName(wf.name);
-          setNodes(wf.graph.nodes.length ? wf.graph.nodes : initialNodes);
+          const ns = wf.graph.nodes.length ? wf.graph.nodes : initialNodes;
+          setNodes(ns);
           setEdges(wf.graph.edges);
-          setComments(wf.graph.comments ?? {});
+          setComments(wf.graph.comments);
           setSavedId(wf.id);
+          history.reset({ nodes: ns, edges: wf.graph.edges, comments: wf.graph.comments });
         } catch {
           toast.error("Could not load workflow");
         }
@@ -94,7 +122,12 @@ function Inner({ workflowId }: DesignerProps) {
         if (draft && !cancelled) {
           setNodes(draft.nodes);
           setEdges(draft.edges);
-          setComments(draft.comments ?? {});
+          setComments(draft.comments);
+          history.reset({
+            nodes: draft.nodes,
+            edges: draft.edges,
+            comments: draft.comments,
+          });
         }
       }
       if (!cancelled) setHydrated(true);
@@ -103,14 +136,22 @@ function Inner({ workflowId }: DesignerProps) {
     return () => {
       cancelled = true;
     };
+    // history is stable enough — intentionally not in deps to avoid re-hydration loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowId, auth.user, setNodes, setEdges]);
 
-  // Auto-save draft to localStorage.
+  // Auto-save draft to localStorage + commit a history snapshot.
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => saveDraft({ nodes, edges, comments }), 400);
+    const t = setTimeout(() => {
+      saveDraft({ nodes, edges, comments });
+      if (!suppressHistoryRef.current) {
+        history.commit({ nodes, edges, comments });
+      }
+      suppressHistoryRef.current = false;
+    }, 350);
     return () => clearTimeout(t);
-  }, [nodes, edges, comments, hydrated]);
+  }, [nodes, edges, comments, hydrated, history]);
 
   // Mirror comments into node.data so node renderers can show the badge
   // without prop-drilling. Skipped when nothing actually changes to avoid
@@ -119,15 +160,36 @@ function Inner({ workflowId }: DesignerProps) {
     setNodes((ns) => {
       let changed = false;
       const next = ns.map((n) => {
-        const desired = comments[n.id] ?? "";
-        const current = (n.data as { comment?: string }).comment ?? "";
-        if (desired === current) return n;
+        const desired = comments[n.id] ?? [];
+        const current = (n.data as { notes?: unknown }).notes;
+        if (current === desired) return n;
         changed = true;
-        return { ...n, data: { ...n.data, comment: desired } as typeof n.data };
+        return { ...n, data: { ...n.data, notes: desired } as typeof n.data };
       });
       return changed ? next : ns;
     });
   }, [comments, setNodes]);
+
+  // Apply a snapshot from undo/redo without re-committing it.
+  const applySnapshot = useCallback(
+    (snap: WorkflowSnapshot) => {
+      suppressHistoryRef.current = true;
+      setNodes(snap.nodes);
+      setEdges(snap.edges);
+      setComments(snap.comments);
+    },
+    [setNodes, setEdges],
+  );
+
+  // Listen for global Cmd+Z / Cmd+Shift+Z dispatched by the history hook.
+  useEffect(() => {
+    const onApply = (e: Event) => {
+      const detail = (e as CustomEvent<WorkflowSnapshot>).detail;
+      if (detail) applySnapshot(detail);
+    };
+    window.addEventListener("workflow-history-apply", onApply);
+    return () => window.removeEventListener("workflow-history-apply", onApply);
+  }, [applySnapshot]);
 
   // Cmd/Ctrl+K -> palette
   useEffect(() => {
@@ -177,6 +239,26 @@ function Inner({ workflowId }: DesignerProps) {
     [setNodes, setEdges],
   );
 
+  const handleImport = useCallback(
+    (result: { nodes: WorkflowNode[]; edges: WorkflowEdge[]; comments: CommentMap }) => {
+      setNodes(result.nodes);
+      setEdges(result.edges);
+      setComments(result.comments);
+      setSelectedId(null);
+      setTimeout(() => rfRef.current?.fitView({ padding: 0.3 }), 50);
+      toast.success(`Imported ${result.nodes.length} nodes`);
+    },
+    [setNodes, setEdges],
+  );
+
+  const handleAutoLayout = useCallback(() => {
+    if (nodes.length === 0) return;
+    const next = autoLayout(nodes, edges, "TB");
+    setNodes(next);
+    setTimeout(() => rfRef.current?.fitView({ padding: 0.3, duration: 300 }), 50);
+    toast.success("Layout reflowed");
+  }, [nodes, edges, setNodes]);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -203,8 +285,15 @@ function Inner({ workflowId }: DesignerProps) {
     [setNodes],
   );
 
-  const updateComment = useCallback((id: string, comment: string) => {
-    setComments((c) => ({ ...c, [id]: comment }));
+  const handleAddNote = useCallback(
+    (nodeId: string, text: string) => {
+      setComments((c) => addNote(c, nodeId, currentAuthor, text));
+    },
+    [currentAuthor],
+  );
+
+  const handleRemoveNote = useCallback((nodeId: string, noteId: string) => {
+    setComments((c) => removeNote(c, nodeId, noteId));
   }, []);
 
   const deleteNode = useCallback(
@@ -241,6 +330,16 @@ function Inner({ workflowId }: DesignerProps) {
     }
   }, [auth.user, savedId, name, nodes, edges, comments, navigate]);
 
+  const handleUndo = useCallback(() => {
+    const snap = history.undo();
+    if (snap) applySnapshot(snap);
+  }, [history, applySnapshot]);
+
+  const handleRedo = useCallback(() => {
+    const snap = history.redo();
+    if (snap) applySnapshot(snap);
+  }, [history, applySnapshot]);
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
@@ -268,7 +367,7 @@ function Inner({ workflowId }: DesignerProps) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="hidden items-center gap-2 text-xs sm:flex">
             {errorCount > 0 && (
               <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-medium text-destructive">
@@ -286,6 +385,48 @@ function Inner({ workflowId }: DesignerProps) {
               </span>
             )}
           </div>
+
+          <div className="hidden items-center gap-0.5 sm:flex">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={handleUndo}
+              disabled={!history.canUndo}
+              title="Undo (⌘Z)"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={handleRedo}
+              disabled={!history.canRedo}
+              title="Redo (⌘⇧Z)"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={handleAutoLayout}
+              title="Auto-layout"
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={() => setImportOpen(true)}
+              title="Import JSON"
+            >
+              <Upload className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
           <Button
             size="sm"
             variant="ghost"
@@ -391,9 +532,11 @@ function Inner({ workflowId }: DesignerProps) {
         <NodeConfigPanel
           node={selectedNode}
           automations={automations}
-          comment={selectedNode ? (comments[selectedNode.id] ?? "") : ""}
+          notes={selectedNode ? (comments[selectedNode.id] ?? []) : []}
+          currentAuthor={currentAuthor}
           onChange={updateNodeData}
-          onCommentChange={updateComment}
+          onAddNote={handleAddNote}
+          onRemoveNote={handleRemoveNote}
           onDelete={deleteNode}
           onClose={() => setSelectedId(null)}
         />
@@ -405,6 +548,7 @@ function Inner({ workflowId }: DesignerProps) {
         onAddNode={addNode}
         onApplyTemplate={applyTemplate}
       />
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImport={handleImport} />
     </div>
   );
 }

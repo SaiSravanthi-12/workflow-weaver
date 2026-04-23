@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { SimulationResult, ValidationIssue, WorkflowEdge, WorkflowNode } from "./types";
+import type {
+  CommentMap,
+  SimulationResult,
+  ValidationIssue,
+  WorkflowEdge,
+  WorkflowNode,
+} from "./types";
 import { simulateWorkflow } from "./mockApi";
 import { validateWorkflow } from "./validation";
 import { exportSimulationPdf } from "./pdfExport";
@@ -23,7 +29,7 @@ interface SandboxPanelProps {
   workflowName: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-  comments: Record<string, string>;
+  comments: CommentMap;
 }
 
 export function SandboxPanel({
@@ -71,6 +77,7 @@ export function SandboxPanel({
       workflowName: workflowName || "Untitled workflow",
       result,
       issues,
+      comments,
     });
   };
 
@@ -79,7 +86,9 @@ export function SandboxPanel({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Workflow sandbox</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Simulate execution with mock data.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Simulate execution with mock data.
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -114,7 +123,12 @@ export function SandboxPanel({
           <Stat label="Edges" value={edges.length} />
         </div>
         {result && (
-          <Button variant="outline" size="sm" className="mt-3 w-full" onClick={exportPdf}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={exportPdf}
+          >
             <FileText className="mr-2 h-4 w-4" /> Export PDF report
           </Button>
         )}
@@ -164,7 +178,7 @@ export function SandboxPanel({
             </SectionTitle>
             <ol className="relative ml-2 space-y-3 border-l border-border pl-4">
               {result.steps.map((s, i) => {
-                const note = comments[s.nodeId];
+                const notes = comments[s.nodeId] ?? [];
                 return (
                   <li key={`${s.nodeId}-${i}`} className="relative">
                     <span
@@ -187,11 +201,23 @@ export function SandboxPanel({
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{s.message}</p>
-                    {note && (
-                      <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-dashed border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground">
-                        <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
-                        <span>{note}</span>
-                      </div>
+                    {notes.length > 0 && (
+                      <ul className="mt-1.5 space-y-1">
+                        {notes.map((n) => (
+                          <li
+                            key={n.id}
+                            className="flex items-start gap-1.5 rounded-md border border-dashed border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground"
+                          >
+                            <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-medium text-foreground">
+                                {n.author}
+                              </div>
+                              <div className="whitespace-pre-wrap break-words">{n.text}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </li>
                 );
