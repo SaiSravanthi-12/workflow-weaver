@@ -1,49 +1,34 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+/**
+ * Auth removed — this page accepts any input (or none) and immediately
+ * redirects into the designer. It exists only so old `/login` links and
+ * any cached deep links still resolve cleanly.
+ */
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Workflow, Loader2 } from "lucide-react";
-import { useAuth } from "@/features/auth/AuthProvider";
-import { toast } from "sonner";
+import { Workflow, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
-  head: () => ({ meta: [{ title: "Sign in · HR Workflow Designer" }] }),
+  head: () => ({ meta: [{ title: "Enter · HR Workflow Designer" }] }),
 });
 
 function LoginPage() {
-  const auth = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
 
+  // Auto-redirect after mount — anyone landing here goes straight in.
   useEffect(() => {
-    if (auth.user) navigate({ to: "/library" });
-  }, [auth.user, navigate]);
+    const t = setTimeout(() => navigate({ to: "/" }), 0);
+    return () => clearTimeout(t);
+  }, [navigate]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    const res =
-      mode === "signin"
-        ? await auth.signInWithPassword(email, password)
-        : await auth.signUp(email, password);
-    setBusy(false);
-    if (res.error) {
-      toast.error(res.error);
-    } else if (mode === "signup") {
-      toast.success("Check your inbox to confirm your email.");
-    }
-  };
-
-  const google = async () => {
-    setBusy(true);
-    const res = await auth.signInWithGoogle();
-    setBusy(false);
-    if (res.error) toast.error(res.error);
+  const enter = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    navigate({ to: "/" });
   };
 
   return (
@@ -55,54 +40,31 @@ function LoginPage() {
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">HR Workflow Designer</div>
-            <div className="text-[11px] text-muted-foreground">
-              {mode === "signin" ? "Sign in to your account" : "Create your account"}
-            </div>
+            <div className="text-[11px] text-muted-foreground">No sign-in required</div>
           </div>
         </div>
 
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={enter} className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Email</Label>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label className="text-xs">Email (optional)</Label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Password</Label>
+            <Label className="text-xs">Password (optional)</Label>
             <Input
               type="password"
-              required
-              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === "signin" ? "Sign in" : "Sign up"}
+          <Button type="submit" className="w-full">
+            Enter designer <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </form>
 
-        <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <Button variant="outline" className="w-full" onClick={google} disabled={busy}>
-          Continue with Google
-        </Button>
-
-        <button
-          type="button"
-          className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => setMode((m) => (m === "signin" ? "signup" : "signin"))}
-        >
-          {mode === "signin" ? "No account? Sign up" : "Already have an account? Sign in"}
-        </button>
-
-        <div className="mt-4 text-center">
-          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
-            ← Back to designer
-          </Link>
-        </div>
+        <p className="mt-4 text-center text-[11px] text-muted-foreground">
+          Authentication is disabled in this build — anything you type is accepted.
+        </p>
       </div>
     </div>
   );

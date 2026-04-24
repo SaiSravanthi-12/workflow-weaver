@@ -1,15 +1,17 @@
 /**
- * Auth context — wraps Supabase's session state and exposes it to the app.
- * Pattern: subscribe to onAuthStateChange BEFORE the initial getSession().
+ * Auth has been removed from the app — this stub keeps the same surface so
+ * existing imports continue to compile, but every method is a no-op and the
+ * app behaves as if the user is always signed in (anonymously).
  */
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { createContext, useContext, type ReactNode } from "react";
+
+interface StubUser {
+  id: string;
+  email: string;
+}
 
 interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
+  user: StubUser | null;
   loading: boolean;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -17,66 +19,25 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const STUB_USER: StubUser = { id: "local", email: "designer@local" };
+
+const value: AuthContextValue = {
+  user: STUB_USER,
+  loading: false,
+  signInWithPassword: async () => ({ error: null }),
+  signUp: async () => ({ error: null }),
+  signInWithGoogle: async () => ({ error: null }),
+  signOut: async () => {
+    /* no-op */
+  },
+};
+
+const AuthContext = createContext<AuthContextValue>(value);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // 1. Subscribe FIRST so we don't miss the initial event.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setLoading(false);
-    });
-    // 2. Then prime with the current session.
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      session,
-      user: session?.user ?? null,
-      loading,
-      signInWithPassword: async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error?.message ?? null };
-      },
-      signUp: async (email, password) => {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        return { error: error?.message ?? null };
-      },
-      signInWithGoogle: async () => {
-        const result = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin,
-        });
-        if (result.error) {
-          return {
-            error: result.error instanceof Error ? result.error.message : String(result.error),
-          };
-        }
-        return { error: null };
-      },
-      signOut: async () => {
-        await supabase.auth.signOut();
-      },
-    }),
-    [session, loading],
-  );
-
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within <AuthProvider>");
-  return ctx;
+  return useContext(AuthContext);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, X, MessageSquare } from "lucide-react";
+import { Trash2, X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,17 +12,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AutomationDefinition, WorkflowNode, WorkflowNodeData } from "./types";
+import type {
+  AutomationDefinition,
+  CommentNote,
+  WorkflowNode,
+  WorkflowNodeData,
+} from "./types";
 import { KVEditor } from "./KVEditor";
+import { CommentThread } from "./CommentThread";
 import { NODE_LABELS } from "./defaults";
 import { validateNodeData, type FieldErrors } from "./schemas";
 
 interface ConfigPanelProps {
   node: WorkflowNode | null;
   automations: AutomationDefinition[];
-  comment: string;
+  comments: CommentNote[];
   onChange: (id: string, data: WorkflowNodeData) => void;
-  onCommentChange: (id: string, comment: string) => void;
+  onCommentsChange: (id: string, notes: CommentNote[]) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
@@ -30,9 +36,9 @@ interface ConfigPanelProps {
 export function NodeConfigPanel({
   node,
   automations,
-  comment,
+  comments,
   onChange,
-  onCommentChange,
+  onCommentsChange,
   onDelete,
   onClose,
 }: ConfigPanelProps) {
@@ -40,6 +46,7 @@ export function NodeConfigPanel({
     () => (node ? validateNodeData(node.data.kind, node.data) : {}),
     [node],
   );
+  const errorCount = Object.keys(errors).length;
 
   if (!node) {
     return (
@@ -62,9 +69,17 @@ export function NodeConfigPanel({
   return (
     <aside className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card">
       <div className="flex items-start justify-between border-b border-border px-4 py-3">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {NODE_LABELS[kind]} node
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {NODE_LABELS[kind]} node
+            </span>
+            {errorCount > 0 && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
+                <AlertCircle className="h-2.5 w-2.5" />
+                {errorCount}
+              </span>
+            )}
           </div>
           <h2 className="text-sm font-semibold text-foreground">Edit properties</h2>
         </div>
@@ -95,7 +110,7 @@ export function NodeConfigPanel({
           <EndForm data={node.data} errors={errors} onChange={(d) => onChange(node.id, d)} />
         )}
 
-        <CommentField value={comment} onChange={(v) => onCommentChange(node.id, v)} />
+        <CommentThread notes={comments} onChange={(notes) => onCommentsChange(node.id, notes)} />
       </div>
 
       <div className="border-t border-border p-3">
@@ -126,32 +141,23 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
+      <Label className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+        <span>
+          {label}
+          {required && <span className="ml-0.5 text-destructive">*</span>}
+        </span>
+        {error && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive"
+            title={error}
+          >
+            <AlertCircle className="h-2.5 w-2.5" />
+            invalid
+          </span>
+        )}
       </Label>
       {children}
       {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function CommentField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="space-y-1.5 rounded-lg border border-dashed border-border bg-secondary/30 p-3">
-      <Label className="flex items-center text-xs font-medium text-foreground">
-        <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-        Notes / comment
-      </Label>
-      <Textarea
-        rows={2}
-        placeholder="Leave a note for review during simulation or editing…"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <p className="text-[10px] text-muted-foreground">
-        Visible on the node and in the simulation log.
-      </p>
     </div>
   );
 }

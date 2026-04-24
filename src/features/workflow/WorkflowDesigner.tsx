@@ -15,8 +15,19 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { Link, useNavigate } from "@tanstack/react-router";
-import { Play, Workflow, Sparkles, Save, FolderOpen, LogOut, LogIn, Command } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  Play,
+  Workflow,
+  Sparkles,
+  Save,
+  FolderOpen,
+  Command,
+  Undo2,
+  Redo2,
+  LayoutGrid,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { nodeTypes } from "./nodes";
@@ -24,14 +35,17 @@ import { NodeSidebar } from "./NodeSidebar";
 import { NodeConfigPanel } from "./NodeConfigPanel";
 import { SandboxPanel } from "./SandboxPanel";
 import { CommandPalette } from "./CommandPalette";
+import { ImportDialog } from "./ImportDialog";
 import { defaultDataFor, uid } from "./defaults";
 import { getAutomations } from "./mockApi";
 import { validateWorkflow } from "./validation";
 import { loadDraft, saveDraft } from "./persistence";
-import { useAuth } from "@/features/auth/AuthProvider";
 import { createWorkflow, getWorkflow, updateWorkflow } from "./library";
+import { autoLayout } from "./autoLayout";
+import { useHistory, type HistorySnapshot } from "./useHistory";
 import type {
   AutomationDefinition,
+  CommentNote,
   NodeKind,
   WorkflowEdge,
   WorkflowNode,
@@ -54,38 +68,74 @@ const initialNodes: WorkflowNode[] = [
 function Inner({ workflowId }: DesignerProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
-  const [comments, setComments] = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<Record<string, CommentNote[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [automations, setAutomations] = useState<AutomationDefinition[]>([]);
   const [sandboxOpen, setSandboxOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState("Untitled workflow");
   const [savedId, setSavedId] = useState<string | undefined>(workflowId);
   const [hydrated, setHydrated] = useState(false);
 
-  const auth = useAuth();
-  const navigate = useNavigate();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rfRef = useRef<ReactFlowInstance<WorkflowNode, WorkflowEdge> | null>(null);
 
-  // Load automations once.
+  // ---- Undo/redo ----
+  const history = useHistory({ debounceMs: 300 });
+  const isApplyingHistoryRef = useRef(false);
+
+  const applySnapshot = useCallback(
+    (snap: HistorySnapshot) => {
+      isApplyingHistoryRef.current = true;
+      setNodes(snap.nodes);
+      setEdges(snap.edges);
+      setComments(snap.comments);
+      // Release the guard after React has flushed our state updates so the
+      // history-recording effect ignores this round-trip.
+      setTimeout(() => {
+        isApplyingHistoryRef.current = false;
+      }, 0);
+    },
+    [setNodes, setEdges],
+  );
+
+  const onUndo = useCallback(() => {
+    const snap = history.undo();
+    if (snap) applySnapshot(snap);
+  }, [history, applySnapshot]);
+
+  const onRedo = useCallback(() => {
+    const snap = history.redo();
+    if (snap) applySnapshot(snap);
+  }, [history, applySnapshot]);
+
+  // Record snapshots whenever graph state changes (debounced inside useHistory).
+  useEffect(() => {
+    if (!hydrated) return;
+    if (isApplyingHistoryRef.current) return;
+    history.push({ nodes, edges, comments });
+  }, [nodes, edges, comments, hydrated, history]);
+
+  // ---- Bootstrapping ----
   useEffect(() => {
     void getAutomations().then(setAutomations);
   }, []);
 
-  // Hydrate from Supabase (if id) or localStorage draft.
   useEffect(() => {
     let cancelled = false;
     async function hydrate() {
-      if (workflowId && auth.user) {
+      if (workflowId) {
         try {
           const wf = await getWorkflow(workflowId);
           if (cancelled) return;
           setName(wf.name);
-          setNodes(wf.graph.nodes.length ? wf.graph.nodes : initialNodes);
+          const ns = wf.graph.nodes.length ? wf.graph.nodes : initialNodes;
+          setNodes(ns);
           setEdges(wf.graph.edges);
           setComments(wf.graph.comments ?? {});
           setSavedId(wf.id);
+          history.reset({ nodes: ns, edges: wf.graph.edges, comments: wf.graph.comments ?? {} });
         } catch {
           toast.error("Could not load workflow");
         }
@@ -95,6 +145,13 @@ function Inner({ workflowId }: DesignerProps) {
           setNodes(draft.nodes);
           setEdges(draft.edges);
           setComments(draft.comments ?? {});
+          history.reset({
+            nodes: draft.nodes,
+            edges: draft.edges,
+            comments: draft.comments ?? {},
+          });
+        } else if (!cancelled) {
+          history.reset({ nodes: initialNodes, edges: [], comments: {} });
         }
       }
       if (!cancelled) setHydrated(true);
@@ -103,44 +160,71 @@ function Inner({ workflowId }: DesignerProps) {
     return () => {
       cancelled = true;
     };
-  }, [workflowId, auth.user, setNodes, setEdges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowId]);
 
-  // Auto-save draft to localStorage.
+  // Auto-save draft.
   useEffect(() => {
     if (!hydrated) return;
     const t = setTimeout(() => saveDraft({ nodes, edges, comments }), 400);
     return () => clearTimeout(t);
   }, [nodes, edges, comments, hydrated]);
 
-  // Mirror comments into node.data so node renderers can show the badge
-  // without prop-drilling. Skipped when nothing actually changes to avoid
-  // an infinite render loop with React Flow's internal state.
+  // Mirror comment count + latest body into node.data so the node card can
+  // render its badge/strip without prop-drilling.
   useEffect(() => {
     setNodes((ns) => {
       let changed = false;
       const next = ns.map((n) => {
-        const desired = comments[n.id] ?? "";
-        const current = (n.data as { comment?: string }).comment ?? "";
-        if (desired === current) return n;
+        const list = comments[n.id] ?? [];
+        const desiredCount = list.length;
+        const desiredLatest = list.length
+          ? list.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0].body
+          : "";
+        const cur = n.data as { commentCount?: number; comment?: string };
+        if ((cur.commentCount ?? 0) === desiredCount && (cur.comment ?? "") === desiredLatest) {
+          return n;
+        }
         changed = true;
-        return { ...n, data: { ...n.data, comment: desired } as typeof n.data };
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            comment: desiredLatest,
+            commentCount: desiredCount,
+          } as typeof n.data,
+        };
       });
       return changed ? next : ns;
     });
   }, [comments, setNodes]);
 
-  // Cmd/Ctrl+K -> palette
+  // ---- Keyboard shortcuts ----
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((o) => !o);
+        return;
+      }
+      // Skip undo/redo when typing in an input/textarea.
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (target?.isContentEditable) return;
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        e.preventDefault();
+        onUndo();
+      } else if (mod && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+        e.preventDefault();
+        onRedo();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [onUndo, onRedo]);
 
+  // ---- Graph operations ----
   const onConnect: OnConnect = useCallback(
     (params: Connection) =>
       setEdges((eds) => addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds)),
@@ -177,6 +261,28 @@ function Inner({ workflowId }: DesignerProps) {
     [setNodes, setEdges],
   );
 
+  const importGraph = useCallback(
+    (graph: {
+      nodes: WorkflowNode[];
+      edges: WorkflowEdge[];
+      comments: Record<string, CommentNote[]>;
+    }) => {
+      setNodes(graph.nodes);
+      setEdges(graph.edges);
+      setComments(graph.comments);
+      setSelectedId(null);
+      setTimeout(() => rfRef.current?.fitView({ padding: 0.3 }), 50);
+      toast.success(`Imported ${graph.nodes.length} node(s)`);
+    },
+    [setNodes, setEdges],
+  );
+
+  const onAutoLayout = useCallback(() => {
+    setNodes((ns) => autoLayout(ns, edges));
+    setTimeout(() => rfRef.current?.fitView({ padding: 0.3, duration: 400 }), 60);
+    toast.success("Auto-layout applied");
+  }, [edges, setNodes]);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -203,8 +309,8 @@ function Inner({ workflowId }: DesignerProps) {
     [setNodes],
   );
 
-  const updateComment = useCallback((id: string, comment: string) => {
-    setComments((c) => ({ ...c, [id]: comment }));
+  const updateNodeComments = useCallback((id: string, notes: CommentNote[]) => {
+    setComments((c) => ({ ...c, [id]: notes }));
   }, []);
 
   const deleteNode = useCallback(
@@ -222,11 +328,6 @@ function Inner({ workflowId }: DesignerProps) {
   );
 
   const handleSave = useCallback(async () => {
-    if (!auth.user) {
-      toast.error("Sign in to save workflows");
-      navigate({ to: "/login" });
-      return;
-    }
     try {
       if (savedId) {
         await updateWorkflow(savedId, { name, nodes, edges, comments });
@@ -234,12 +335,12 @@ function Inner({ workflowId }: DesignerProps) {
       } else {
         const wf = await createWorkflow({ name, nodes, edges, comments });
         setSavedId(wf.id);
-        toast.success("Workflow saved");
+        toast.success("Workflow saved to library");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     }
-  }, [auth.user, savedId, name, nodes, edges, comments, navigate]);
+  }, [savedId, name, nodes, edges, comments]);
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
@@ -286,6 +387,38 @@ function Inner({ workflowId }: DesignerProps) {
               </span>
             )}
           </div>
+
+          <div className="hidden items-center sm:flex">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={onUndo}
+              disabled={!history.canUndo}
+              title="Undo (⌘Z)"
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={onRedo}
+              disabled={!history.canRedo}
+              title="Redo (⌘⇧Z)"
+            >
+              <Redo2 className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button size="sm" variant="ghost" onClick={onAutoLayout} title="Auto-layout">
+            <LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Layout
+          </Button>
+
+          <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)} title="Import JSON">
+            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+
           <Button
             size="sm"
             variant="ghost"
@@ -296,27 +429,16 @@ function Inner({ workflowId }: DesignerProps) {
             <Command className="mr-1.5 h-3.5 w-3.5" />
             <kbd className="text-[10px] text-muted-foreground">⌘K</kbd>
           </Button>
-          {auth.user ? (
-            <>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/library">
-                  <FolderOpen className="mr-1.5 h-3.5 w-3.5" /> Library
-                </Link>
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleSave}>
-                <Save className="mr-1.5 h-3.5 w-3.5" /> Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => auth.signOut()} title="Sign out">
-                <LogOut className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          ) : (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/login">
-                <LogIn className="mr-1.5 h-3.5 w-3.5" /> Sign in
-              </Link>
-            </Button>
-          )}
+
+          <Button asChild size="sm" variant="outline">
+            <Link to="/library">
+              <FolderOpen className="mr-1.5 h-3.5 w-3.5" /> Library
+            </Link>
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleSave}>
+            <Save className="mr-1.5 h-3.5 w-3.5" /> Save
+          </Button>
+
           <Button size="sm" variant="outline" onClick={() => setSandboxOpen((o) => !o)}>
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Sandbox
@@ -391,9 +513,9 @@ function Inner({ workflowId }: DesignerProps) {
         <NodeConfigPanel
           node={selectedNode}
           automations={automations}
-          comment={selectedNode ? (comments[selectedNode.id] ?? "") : ""}
+          comments={selectedNode ? (comments[selectedNode.id] ?? []) : []}
           onChange={updateNodeData}
-          onCommentChange={updateComment}
+          onCommentsChange={updateNodeComments}
           onDelete={deleteNode}
           onClose={() => setSelectedId(null)}
         />
@@ -404,7 +526,13 @@ function Inner({ workflowId }: DesignerProps) {
         onOpenChange={setPaletteOpen}
         onAddNode={addNode}
         onApplyTemplate={applyTemplate}
+        onAutoLayout={onAutoLayout}
+        onImport={() => setImportOpen(true)}
+        onUndo={onUndo}
+        onRedo={onRedo}
       />
+
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImport={importGraph} />
     </div>
   );
 }

@@ -1,8 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Plus, Trash2, Workflow } from "lucide-react";
-import { useAuth } from "@/features/auth/AuthProvider";
 import { deleteWorkflow, listWorkflows, type SavedWorkflow } from "@/features/workflow/library";
 import { toast } from "sonner";
 
@@ -12,20 +11,13 @@ export const Route = createFileRoute("/library")({
 });
 
 function LibraryPage() {
-  const auth = useAuth();
-  const navigate = useNavigate();
   const [items, setItems] = useState<SavedWorkflow[] | null>(null);
 
   useEffect(() => {
-    if (!auth.loading && !auth.user) navigate({ to: "/login" });
-  }, [auth.loading, auth.user, navigate]);
-
-  useEffect(() => {
-    if (!auth.user) return;
     void listWorkflows()
       .then(setItems)
       .catch(() => toast.error("Could not load workflows"));
-  }, [auth.user]);
+  }, []);
 
   const remove = async (id: string) => {
     try {
@@ -37,8 +29,6 @@ function LibraryPage() {
     }
   };
 
-  if (!auth.user) return null;
-
   return (
     <div className="min-h-screen bg-background">
       <header className="flex h-14 items-center justify-between border-b border-border bg-card px-6">
@@ -48,7 +38,7 @@ function LibraryPage() {
           </div>
           <div>
             <div className="text-sm font-semibold text-foreground">My workflows</div>
-            <div className="text-[11px] text-muted-foreground">{auth.user.email}</div>
+            <div className="text-[11px] text-muted-foreground">Saved locally on this device</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
