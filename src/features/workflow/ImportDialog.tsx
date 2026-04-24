@@ -56,7 +56,7 @@ function coerceNodes(input: unknown): WorkflowNode[] {
             }
           : { x: 0, y: 0 };
       const type = typeof r.type === "string" ? r.type : kind;
-      return { id, type, position, data: data as WorkflowNode["data"] };
+      return { id, type, position, data: data as WorkflowNode["data"] } as WorkflowNode;
     })
     .filter((n): n is WorkflowNode => n !== null);
 }
