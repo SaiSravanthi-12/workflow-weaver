@@ -403,6 +403,48 @@ function Inner({ workflowId }: DesignerProps) {
     }
   }, [savedId, name, nodes, edges, comments]);
 
+  // Bumped whenever the user wants the sandbox to re-simulate against the
+  // current graph (after undo/redo, auto-layout, or explicit Run click).
+  const [simulationTick, setSimulationTick] = useState(0);
+  const triggerSimulation = useCallback(() => {
+    setSandboxOpen(true);
+    setSimulationTick((t) => t + 1);
+  }, []);
+
+  // Re-simulate automatically after undo/redo or auto-layout, but only when
+  // the sandbox is already open — we don't want to surprise the user.
+  const onUndoAndResim = useCallback(() => {
+    onUndo();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onUndo, sandboxOpen]);
+  const onRedoAndResim = useCallback(() => {
+    onRedo();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onRedo, sandboxOpen]);
+  const onAutoLayoutAndResim = useCallback(() => {
+    onAutoLayout();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onAutoLayout, sandboxOpen]);
+
+  const exportJson = useCallback(() => {
+    const data = JSON.stringify(
+      { name, nodes, edges, comments, exportedAt: new Date().toISOString() },
+      null,
+      2,
+    );
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = (name || "workflow").replace(/[^a-z0-9-_]+/gi, "_").toLowerCase();
+    a.download = `${safeName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("Workflow exported");
+  }, [name, nodes, edges, comments]);
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
