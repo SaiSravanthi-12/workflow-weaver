@@ -114,7 +114,7 @@ function parse(text: string): ParseResult {
             y: Number((raw.position as { y?: unknown }).y) || 0,
           }
         : { x: 80 + idx * 40, y: 80 + idx * 60 };
-      const type = typeof raw.type === "string" ? raw.type : kind;
+      const type = (typeof raw.type === "string" ? raw.type : kind) as NodeKind;
       validIds.add(id);
       nodes.push({ id, type, position: pos, data: data as WorkflowNode["data"] });
     });
