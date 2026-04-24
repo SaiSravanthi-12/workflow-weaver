@@ -12,6 +12,7 @@ import {
   type Connection,
   type OnConnect,
   type ReactFlowInstance,
+  type IsValidConnection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -27,6 +28,7 @@ import {
   Redo2,
   LayoutGrid,
   Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -43,6 +45,7 @@ import { loadDraft, saveDraft } from "./persistence";
 import { createWorkflow, getWorkflow, updateWorkflow } from "./library";
 import { autoLayout } from "./autoLayout";
 import { useHistory, type HistorySnapshot } from "./useHistory";
+import { checkConnection, type ConnectionFix } from "./edgeRules";
 import type {
   AutomationDefinition,
   CommentNote,
