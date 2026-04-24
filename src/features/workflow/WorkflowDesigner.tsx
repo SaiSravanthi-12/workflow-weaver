@@ -550,7 +550,7 @@ function Inner({ workflowId }: DesignerProps) {
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Sandbox
           </Button>
-          <Button size="sm" onClick={() => setSandboxOpen(true)}>
+          <Button size="sm" onClick={triggerSimulation} title="Run simulation against current graph">
             <Play className="mr-1.5 h-3.5 w-3.5" />
             Run
           </Button>
@@ -567,6 +567,7 @@ function Inner({ workflowId }: DesignerProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             onInit={(inst) => (rfRef.current = inst)}
             onNodeClick={(_, node) => setSelectedId(node.id)}
@@ -614,6 +615,7 @@ function Inner({ workflowId }: DesignerProps) {
             nodes={nodes}
             edges={edges}
             comments={comments}
+            runTrigger={simulationTick}
           />
         </div>
 
