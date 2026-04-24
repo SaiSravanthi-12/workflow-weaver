@@ -94,11 +94,14 @@ function Inner({ workflowId }: DesignerProps) {
       setNodes(snap.nodes);
       setEdges(snap.edges);
       setComments(snap.comments);
-      // Release the guard after React has flushed our state updates so the
-      // history-recording effect ignores this round-trip.
-      setTimeout(() => {
-        isApplyingHistoryRef.current = false;
-      }, 0);
+      // Release the guard after React has flushed the resulting effect runs.
+      // We use two RAFs to make sure the recording effect (which runs after
+      // commit) sees the guard as `true`.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          isApplyingHistoryRef.current = false;
+        });
+      });
     },
     [setNodes, setEdges],
   );
@@ -106,11 +109,13 @@ function Inner({ workflowId }: DesignerProps) {
   const onUndo = useCallback(() => {
     const snap = history.undo();
     if (snap) applySnapshot(snap);
+    else toast.message("Nothing to undo");
   }, [history, applySnapshot]);
 
   const onRedo = useCallback(() => {
     const snap = history.redo();
     if (snap) applySnapshot(snap);
+    else toast.message("Nothing to redo");
   }, [history, applySnapshot]);
 
   // Record snapshots whenever graph state changes (debounced inside useHistory).
