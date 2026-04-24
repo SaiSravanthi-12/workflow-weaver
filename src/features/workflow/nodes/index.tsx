@@ -36,6 +36,7 @@ interface NodeShellProps {
   showTarget?: boolean;
   badge?: string;
   comment?: string;
+  commentCount?: number;
 }
 
 function NodeShell({
@@ -47,9 +48,11 @@ function NodeShell({
   showTarget = true,
   badge,
   comment,
+  commentCount = 0,
 }: NodeShellProps) {
   const Icon = ICONS[kind];
-  const hasComment = !!comment && comment.trim().length > 0;
+  const hasComment = commentCount > 0 || (!!comment && comment.trim().length > 0);
+  const count = commentCount > 0 ? commentCount : hasComment ? 1 : 0;
   return (
     <div
       className={cn(
@@ -63,10 +66,10 @@ function NodeShell({
       {hasComment && (
         <div
           className="absolute -right-1.5 -top-1.5 z-10 flex h-5 items-center gap-0.5 rounded-full bg-[var(--node-approval)] px-1.5 text-[10px] font-semibold text-white shadow-sm ring-2 ring-card"
-          title={comment}
+          title={`${count} comment${count > 1 ? "s" : ""}${comment ? `: ${comment}` : ""}`}
         >
           <MessageSquare className="h-2.5 w-2.5" />
-          <span>1</span>
+          <span>{count}</span>
         </div>
       )}
       {showTarget && <Handle type="target" position={Position.Top} />}
@@ -96,7 +99,7 @@ function NodeShell({
           {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
         </div>
       </div>
-      {hasComment && (
+      {hasComment && comment && (
         <div className="flex items-start gap-1.5 border-t border-dashed border-border bg-secondary/40 px-3 py-1.5">
           <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
           <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{comment}</p>
@@ -109,8 +112,21 @@ function NodeShell({
 
 type Props = NodeProps<WorkflowNode>;
 
+function commentMeta(data: WorkflowNode["data"]) {
+  return {
+    comment: typeof (data as { comment?: unknown }).comment === "string"
+      ? ((data as { comment?: string }).comment as string)
+      : undefined,
+    commentCount:
+      typeof (data as { commentCount?: unknown }).commentCount === "number"
+        ? ((data as { commentCount?: number }).commentCount as number)
+        : 0,
+  };
+}
+
 export function StartNode({ data, selected }: Props) {
   if (data.kind !== "start") return null;
+  const { comment, commentCount } = commentMeta(data);
   return (
     <NodeShell
       kind="start"
@@ -118,13 +134,15 @@ export function StartNode({ data, selected }: Props) {
       title={data.title}
       subtitle={data.metadata.length ? `${data.metadata.length} metadata` : "Entry point"}
       showTarget={false}
-      comment={typeof data.comment === "string" ? data.comment : undefined}
+      comment={comment}
+      commentCount={commentCount}
     />
   );
 }
 
 export function TaskNode({ data, selected }: Props) {
   if (data.kind !== "task") return null;
+  const { comment, commentCount } = commentMeta(data);
   return (
     <NodeShell
       kind="task"
@@ -132,13 +150,15 @@ export function TaskNode({ data, selected }: Props) {
       title={data.title}
       subtitle={data.assignee ? `Assignee: ${data.assignee}` : data.description || "Human task"}
       badge={data.dueDate || undefined}
-      comment={typeof data.comment === "string" ? data.comment : undefined}
+      comment={comment}
+      commentCount={commentCount}
     />
   );
 }
 
 export function ApprovalNode({ data, selected }: Props) {
   if (data.kind !== "approval") return null;
+  const { comment, commentCount } = commentMeta(data);
   return (
     <NodeShell
       kind="approval"
@@ -146,26 +166,30 @@ export function ApprovalNode({ data, selected }: Props) {
       title={data.title}
       subtitle={`Approver: ${data.approverRole}`}
       badge={data.autoApproveThreshold > 0 ? `auto < ${data.autoApproveThreshold}` : undefined}
-      comment={typeof data.comment === "string" ? data.comment : undefined}
+      comment={comment}
+      commentCount={commentCount}
     />
   );
 }
 
 export function AutomatedNode({ data, selected }: Props) {
   if (data.kind !== "automated") return null;
+  const { comment, commentCount } = commentMeta(data);
   return (
     <NodeShell
       kind="automated"
       selected={!!selected}
       title={data.title}
       subtitle={data.actionId ? data.actionId : "No action selected"}
-      comment={typeof data.comment === "string" ? data.comment : undefined}
+      comment={comment}
+      commentCount={commentCount}
     />
   );
 }
 
 export function EndNode({ data, selected }: Props) {
   if (data.kind !== "end") return null;
+  const { comment, commentCount } = commentMeta(data);
   return (
     <NodeShell
       kind="end"
@@ -174,7 +198,8 @@ export function EndNode({ data, selected }: Props) {
       subtitle={data.message}
       showSource={false}
       badge={data.summary ? "summary" : undefined}
-      comment={typeof data.comment === "string" ? data.comment : undefined}
+      comment={comment}
+      commentCount={commentCount}
     />
   );
 }
