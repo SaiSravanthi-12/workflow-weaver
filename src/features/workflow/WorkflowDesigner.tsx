@@ -12,6 +12,7 @@ import {
   type Connection,
   type OnConnect,
   type ReactFlowInstance,
+  type IsValidConnection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -27,6 +28,7 @@ import {
   Redo2,
   LayoutGrid,
   Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -43,6 +45,7 @@ import { loadDraft, saveDraft } from "./persistence";
 import { createWorkflow, getWorkflow, updateWorkflow } from "./library";
 import { autoLayout } from "./autoLayout";
 import { useHistory, type HistorySnapshot } from "./useHistory";
+import { checkConnection, type ConnectionFix } from "./edgeRules";
 import type {
   AutomationDefinition,
   CommentNote,
@@ -91,11 +94,14 @@ function Inner({ workflowId }: DesignerProps) {
       setNodes(snap.nodes);
       setEdges(snap.edges);
       setComments(snap.comments);
-      // Release the guard after React has flushed our state updates so the
-      // history-recording effect ignores this round-trip.
-      setTimeout(() => {
-        isApplyingHistoryRef.current = false;
-      }, 0);
+      // Release the guard after React has flushed the resulting effect runs.
+      // We use two RAFs to make sure the recording effect (which runs after
+      // commit) sees the guard as `true`.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          isApplyingHistoryRef.current = false;
+        });
+      });
     },
     [setNodes, setEdges],
   );
@@ -103,11 +109,13 @@ function Inner({ workflowId }: DesignerProps) {
   const onUndo = useCallback(() => {
     const snap = history.undo();
     if (snap) applySnapshot(snap);
+    else toast.message("Nothing to undo");
   }, [history, applySnapshot]);
 
   const onRedo = useCallback(() => {
     const snap = history.redo();
     if (snap) applySnapshot(snap);
+    else toast.message("Nothing to redo");
   }, [history, applySnapshot]);
 
   // Record snapshots whenever graph state changes (debounced inside useHistory).
@@ -225,10 +233,63 @@ function Inner({ workflowId }: DesignerProps) {
   }, [onUndo, onRedo]);
 
   // ---- Graph operations ----
-  const onConnect: OnConnect = useCallback(
-    (params: Connection) =>
-      setEdges((eds) => addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds)),
+  const applyConnection = useCallback(
+    (params: Connection) => {
+      setEdges((eds) =>
+        addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds),
+      );
+    },
     [setEdges],
+  );
+
+  const isValidConnection = useCallback<IsValidConnection>(
+    (conn) => checkConnection(conn as Connection, nodes, edges).ok,
+    [nodes, edges],
+  );
+
+  const onConnect: OnConnect = useCallback(
+    (params: Connection) => {
+      const check = checkConnection(params, nodes, edges);
+      if (!check.ok) {
+        const fix = check.fix;
+        toast.error(check.reason ?? "Invalid connection", {
+          action: fix
+            ? {
+                label: fix.label,
+                onClick: () => {
+                  if (fix.kind === "swap") applyConnection(fix.connection);
+                },
+              }
+            : undefined,
+        });
+        return;
+      }
+      if (check.reason && check.fix) {
+        // Allowed but with a friendly nudge (e.g. "no Start node yet").
+        const fix = check.fix as ConnectionFix;
+        toast.warning(check.reason, {
+          action:
+            fix.kind === "addStart"
+              ? {
+                  label: fix.label,
+                  onClick: () => {
+                    const id = uid("start");
+                    setNodes((ns) =>
+                      ns.concat({
+                        id,
+                        type: "start",
+                        position: { x: 80, y: 40 },
+                        data: defaultDataFor("start"),
+                      }),
+                    );
+                  },
+                }
+              : undefined,
+        });
+      }
+      applyConnection(params);
+    },
+    [nodes, edges, applyConnection, setNodes],
   );
 
   const addNode = useCallback(
@@ -342,6 +403,48 @@ function Inner({ workflowId }: DesignerProps) {
     }
   }, [savedId, name, nodes, edges, comments]);
 
+  // Bumped whenever the user wants the sandbox to re-simulate against the
+  // current graph (after undo/redo, auto-layout, or explicit Run click).
+  const [simulationTick, setSimulationTick] = useState(0);
+  const triggerSimulation = useCallback(() => {
+    setSandboxOpen(true);
+    setSimulationTick((t) => t + 1);
+  }, []);
+
+  // Re-simulate automatically after undo/redo or auto-layout, but only when
+  // the sandbox is already open — we don't want to surprise the user.
+  const onUndoAndResim = useCallback(() => {
+    onUndo();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onUndo, sandboxOpen]);
+  const onRedoAndResim = useCallback(() => {
+    onRedo();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onRedo, sandboxOpen]);
+  const onAutoLayoutAndResim = useCallback(() => {
+    onAutoLayout();
+    if (sandboxOpen) setSimulationTick((t) => t + 1);
+  }, [onAutoLayout, sandboxOpen]);
+
+  const exportJson = useCallback(() => {
+    const data = JSON.stringify(
+      { name, nodes, edges, comments, exportedAt: new Date().toISOString() },
+      null,
+      2,
+    );
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = (name || "workflow").replace(/[^a-z0-9-_]+/gi, "_").toLowerCase();
+    a.download = `${safeName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("Workflow exported");
+  }, [name, nodes, edges, comments]);
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
@@ -393,7 +496,7 @@ function Inner({ workflowId }: DesignerProps) {
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={onUndo}
+              onClick={onUndoAndResim}
               disabled={!history.canUndo}
               title="Undo (⌘Z)"
             >
@@ -403,7 +506,7 @@ function Inner({ workflowId }: DesignerProps) {
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={onRedo}
+              onClick={onRedoAndResim}
               disabled={!history.canRedo}
               title="Redo (⌘⇧Z)"
             >
@@ -411,12 +514,16 @@ function Inner({ workflowId }: DesignerProps) {
             </Button>
           </div>
 
-          <Button size="sm" variant="ghost" onClick={onAutoLayout} title="Auto-layout">
+          <Button size="sm" variant="ghost" onClick={onAutoLayoutAndResim} title="Auto-layout">
             <LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Layout
           </Button>
 
           <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)} title="Import JSON">
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+
+          <Button size="sm" variant="ghost" onClick={exportJson} title="Export workflow as JSON">
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
           </Button>
 
           <Button
@@ -443,7 +550,7 @@ function Inner({ workflowId }: DesignerProps) {
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Sandbox
           </Button>
-          <Button size="sm" onClick={() => setSandboxOpen(true)}>
+          <Button size="sm" onClick={triggerSimulation} title="Run simulation against current graph">
             <Play className="mr-1.5 h-3.5 w-3.5" />
             Run
           </Button>
@@ -460,6 +567,7 @@ function Inner({ workflowId }: DesignerProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             onInit={(inst) => (rfRef.current = inst)}
             onNodeClick={(_, node) => setSelectedId(node.id)}
@@ -507,6 +615,7 @@ function Inner({ workflowId }: DesignerProps) {
             nodes={nodes}
             edges={edges}
             comments={comments}
+            runTrigger={simulationTick}
           />
         </div>
 

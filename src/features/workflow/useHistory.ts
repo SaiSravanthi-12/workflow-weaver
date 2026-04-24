@@ -1,8 +1,14 @@
 /**
  * Undo/redo history for the workflow graph.
  *
- * Snapshots are debounced — rapid drag/typing collapses into a single entry
- * so users can undo at meaningful checkpoints rather than per-keystroke.
+ * Stacks live in React state so consumers re-render when `canUndo` /
+ * `canRedo` change. Snapshots are debounced — rapid drag/typing collapses
+ * into a single entry so users can undo at meaningful checkpoints rather
+ * than per-keystroke.
+ *
+ * Important: callers should pass an `isApplyingExternal` flag to `push` so
+ * snapshots that originate from an undo/redo round-trip aren't recorded
+ * back into history.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CommentNote, WorkflowEdge, WorkflowNode } from "./types";
@@ -28,86 +34,113 @@ export interface UseHistory {
 }
 
 function clone(s: HistorySnapshot): HistorySnapshot {
-  // Structured-clone-ish via JSON — fine for plain graph data.
   return JSON.parse(JSON.stringify(s)) as HistorySnapshot;
 }
 
+function snapEqual(a: HistorySnapshot | null, b: HistorySnapshot): boolean {
+  if (!a) return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function useHistory({ limit = 80, debounceMs = 250 }: Options = {}): UseHistory {
-  const pastRef = useRef<HistorySnapshot[]>([]);
-  const futureRef = useRef<HistorySnapshot[]>([]);
+  const [past, setPast] = useState<HistorySnapshot[]>([]);
+  const [future, setFuture] = useState<HistorySnapshot[]>([]);
   const currentRef = useRef<HistorySnapshot | null>(null);
   const pendingRef = useRef<HistorySnapshot | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [, force] = useState(0);
-  const rerender = useCallback(() => force((n) => n + 1), []);
 
   const commitPending = useCallback(() => {
-    if (!pendingRef.current || !currentRef.current) {
-      pendingRef.current = null;
-      return;
-    }
     const snap = pendingRef.current;
     pendingRef.current = null;
-    pastRef.current.push(currentRef.current);
-    if (pastRef.current.length > limit) pastRef.current.shift();
-    futureRef.current = [];
+    if (!snap || !currentRef.current) return;
+    if (snapEqual(currentRef.current, snap)) return;
+    setPast((p) => {
+      const next = p.concat(currentRef.current!);
+      if (next.length > limit) next.shift();
+      return next;
+    });
+    setFuture([]);
     currentRef.current = snap;
-    rerender();
-  }, [limit, rerender]);
+  }, [limit]);
 
   const push = useCallback(
     (snap: HistorySnapshot) => {
       const cloned = clone(snap);
       if (!currentRef.current) {
         currentRef.current = cloned;
-        rerender();
         return;
       }
+      if (snapEqual(currentRef.current, cloned)) return;
       pendingRef.current = cloned;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(commitPending, debounceMs);
     },
-    [commitPending, debounceMs, rerender],
+    [commitPending, debounceMs],
   );
 
-  const reset = useCallback(
-    (snap: HistorySnapshot) => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      pendingRef.current = null;
-      pastRef.current = [];
-      futureRef.current = [];
-      currentRef.current = clone(snap);
-      rerender();
-    },
-    [rerender],
-  );
+  const reset = useCallback((snap: HistorySnapshot) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    pendingRef.current = null;
+    setPast([]);
+    setFuture([]);
+    currentRef.current = clone(snap);
+  }, []);
 
   const undo = useCallback((): HistorySnapshot | null => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (pendingRef.current) {
-      // Flush pending into the past so the undo step targets the latest edit.
-      if (currentRef.current) pastRef.current.push(currentRef.current);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    // Flush any pending edit so the undo step targets the latest change.
+    if (pendingRef.current && currentRef.current && !snapEqual(currentRef.current, pendingRef.current)) {
+      const flushed = currentRef.current;
       currentRef.current = pendingRef.current;
       pendingRef.current = null;
+      setPast((p) => {
+        const next = p.concat(flushed);
+        if (next.length > limit) next.shift();
+        return next;
+      });
+      setFuture([]);
+    } else {
+      pendingRef.current = null;
     }
-    const prev = pastRef.current.pop();
-    if (!prev || !currentRef.current) return null;
-    futureRef.current.push(currentRef.current);
-    currentRef.current = prev;
-    rerender();
-    return clone(prev);
-  }, [rerender]);
+
+    let restored: HistorySnapshot | null = null;
+    setPast((p) => {
+      if (p.length === 0 || !currentRef.current) {
+        restored = null;
+        return p;
+      }
+      const next = p.slice(0, -1);
+      restored = p[p.length - 1];
+      setFuture((f) => f.concat(currentRef.current!));
+      currentRef.current = restored;
+      return next;
+    });
+    return restored ? clone(restored) : null;
+  }, [limit]);
 
   const redo = useCallback((): HistorySnapshot | null => {
-    const next = futureRef.current.pop();
-    if (!next || !currentRef.current) return null;
-    pastRef.current.push(currentRef.current);
-    currentRef.current = next;
-    rerender();
-    return clone(next);
-  }, [rerender]);
+    let restored: HistorySnapshot | null = null;
+    setFuture((f) => {
+      if (f.length === 0 || !currentRef.current) {
+        restored = null;
+        return f;
+      }
+      const next = f.slice(0, -1);
+      restored = f[f.length - 1];
+      setPast((p) => {
+        const out = p.concat(currentRef.current!);
+        if (out.length > limit) out.shift();
+        return out;
+      });
+      currentRef.current = restored;
+      return next;
+    });
+    return restored ? clone(restored) : null;
+  }, [limit]);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -119,7 +152,7 @@ export function useHistory({ limit = 80, debounceMs = 250 }: Options = {}): UseH
     reset,
     undo,
     redo,
-    canUndo: pastRef.current.length > 0 || pendingRef.current !== null,
-    canRedo: futureRef.current.length > 0,
+    canUndo: past.length > 0,
+    canRedo: future.length > 0,
   };
 }

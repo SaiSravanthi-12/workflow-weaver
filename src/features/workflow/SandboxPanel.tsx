@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Play,
   X,
@@ -30,6 +30,12 @@ interface SandboxPanelProps {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   comments: Record<string, CommentNote[]>;
+  /**
+   * Bumped by the parent whenever a re-simulation should run against the
+   * latest graph (e.g. user clicked Run, or undo/redo/auto-layout fired
+   * while the panel was open).
+   */
+  runTrigger?: number;
 }
 
 export function SandboxPanel({
@@ -39,14 +45,13 @@ export function SandboxPanel({
   nodes,
   edges,
   comments,
+  runTrigger = 0,
 }: SandboxPanelProps) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
 
-  if (!open) return null;
-
-  const run = async () => {
+  const run = useCallback(async () => {
     setRunning(true);
     setResult(null);
     const found = validateWorkflow(nodes, edges);
@@ -55,10 +60,31 @@ export function SandboxPanel({
       setRunning(false);
       return;
     }
-    const res = await simulateWorkflow({ nodes, edges });
-    setResult(res);
-    setRunning(false);
-  };
+    try {
+      const res = await simulateWorkflow({ nodes, edges });
+      setResult(res);
+    } catch (e) {
+      setIssues((prev) =>
+        prev.concat({
+          level: "error",
+          message: e instanceof Error ? e.message : "Simulation failed",
+        }),
+      );
+    } finally {
+      setRunning(false);
+    }
+  }, [nodes, edges]);
+
+  // Auto-run whenever the parent bumps the trigger (Run button, undo/redo,
+  // auto-layout). We only fire when the panel is actually open.
+  useEffect(() => {
+    if (!open) return;
+    if (runTrigger === 0) return;
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runTrigger, open]);
+
+  if (!open) return null;
 
   const exportJson = () => {
     const data = JSON.stringify({ nodes, edges, comments }, null, 2);
