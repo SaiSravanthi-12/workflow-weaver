@@ -15,7 +15,19 @@ export interface KeyValue {
   value: string;
 }
 
-/** Per-node author note. Stored alongside data so it serializes naturally. */
+/**
+ * A single threaded comment left on a node by a reviewer.
+ * Multiple notes are kept per node so reviewer discussions don't overwrite
+ * each other.
+ */
+export interface CommentNote {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string; // ISO
+}
+
+/** Per-node author note (legacy single-string field, still surfaced on the node card). */
 export interface WithComment {
   comment?: string;
 }
