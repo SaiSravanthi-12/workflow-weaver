@@ -1,8 +1,12 @@
 /**
- * JSON import dialog — paste a workflow snapshot (nodes/edges/comments) to
- * replace the current canvas. Validates loosely so partial exports work.
+ * JSON import dialog.
+ *
+ * The parser is intentionally forgiving: malformed nodes/edges/comments
+ * are *skipped* rather than aborting the entire import, and every dropped
+ * item is surfaced as an issue inside the dialog so the user knows what
+ * was salvaged.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Upload, AlertTriangle } from "lucide-react";
-import type { CommentNote, WorkflowEdge, WorkflowNode } from "./types";
+import { Upload, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { CommentNote, NodeKind, WorkflowEdge, WorkflowNode } from "./types";
 
 interface Props {
   open: boolean;
@@ -26,85 +31,181 @@ interface Props {
   }) => void;
 }
 
-interface RawNode {
-  id?: unknown;
-  type?: unknown;
-  position?: unknown;
-  data?: unknown;
-}
-interface RawEdge {
-  id?: unknown;
-  source?: unknown;
-  target?: unknown;
+interface Issue {
+  level: "error" | "warning" | "info";
+  message: string;
 }
 
-function coerceNodes(input: unknown): WorkflowNode[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((raw, idx): WorkflowNode | null => {
-      if (!raw || typeof raw !== "object") return null;
-      const r = raw as RawNode;
-      const id = typeof r.id === "string" ? r.id : `imported_${idx}`;
-      const data = r.data && typeof r.data === "object" ? (r.data as Record<string, unknown>) : null;
+interface ParseResult {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+  comments: Record<string, CommentNote[]>;
+  issues: Issue[];
+  fatal: boolean;
+}
+
+const VALID_KINDS: NodeKind[] = ["start", "task", "approval", "automated", "end"];
+
+function isPlain(o: unknown): o is Record<string, unknown> {
+  return !!o && typeof o === "object" && !Array.isArray(o);
+}
+
+function parse(text: string): ParseResult {
+  const issues: Issue[] = [];
+  const empty: ParseResult = {
+    nodes: [],
+    edges: [],
+    comments: {},
+    issues,
+    fatal: false,
+  };
+
+  if (!text.trim()) {
+    return { ...empty, fatal: true, issues: [{ level: "error", message: "Paste some JSON first." }] };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Invalid JSON";
+    return { ...empty, fatal: true, issues: [{ level: "error", message: `JSON parse error — ${msg}` }] };
+  }
+
+  if (!isPlain(parsed)) {
+    return {
+      ...empty,
+      fatal: true,
+      issues: [{ level: "error", message: "Top-level value must be an object with `nodes`/`edges`/`comments`." }],
+    };
+  }
+
+  const root = parsed;
+  const nodes: WorkflowNode[] = [];
+  const validIds = new Set<string>();
+
+  // ---- nodes ----
+  const rawNodes = root.nodes;
+  if (rawNodes !== undefined && !Array.isArray(rawNodes)) {
+    issues.push({ level: "warning", message: "`nodes` is not an array — skipping all nodes." });
+  } else if (Array.isArray(rawNodes)) {
+    rawNodes.forEach((raw, idx) => {
+      if (!isPlain(raw)) {
+        issues.push({ level: "warning", message: `Node #${idx + 1}: not an object, skipped.` });
+        return;
+      }
+      const data = isPlain(raw.data) ? raw.data : null;
       const kind = data && typeof data.kind === "string" ? (data.kind as string) : null;
-      if (!kind) return null;
-      const position =
-        r.position && typeof r.position === "object"
-          ? {
-              x: Number((r.position as { x?: unknown }).x) || 0,
-              y: Number((r.position as { y?: unknown }).y) || 0,
-            }
-          : { x: 0, y: 0 };
-      const type = typeof r.type === "string" ? r.type : kind;
-      return { id, type, position, data: data as WorkflowNode["data"] } as WorkflowNode;
-    })
-    .filter((n): n is WorkflowNode => n !== null);
-}
+      if (!kind || !VALID_KINDS.includes(kind as NodeKind)) {
+        issues.push({
+          level: "warning",
+          message: `Node #${idx + 1}: missing or invalid \`data.kind\` (got ${JSON.stringify(kind)}), skipped.`,
+        });
+        return;
+      }
+      const id = typeof raw.id === "string" && raw.id.trim() ? raw.id : `imported_${idx}`;
+      if (validIds.has(id)) {
+        issues.push({ level: "warning", message: `Node #${idx + 1}: duplicate id \`${id}\`, skipped.` });
+        return;
+      }
+      const pos = isPlain(raw.position)
+        ? {
+            x: Number((raw.position as { x?: unknown }).x) || 0,
+            y: Number((raw.position as { y?: unknown }).y) || 0,
+          }
+        : { x: 80 + idx * 40, y: 80 + idx * 60 };
+      const type = typeof raw.type === "string" ? raw.type : kind;
+      validIds.add(id);
+      nodes.push({ id, type, position: pos, data: data as WorkflowNode["data"] });
+    });
+  }
 
-function coerceEdges(input: unknown): WorkflowEdge[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((raw, idx): WorkflowEdge | null => {
-      if (!raw || typeof raw !== "object") return null;
-      const r = raw as RawEdge;
-      if (typeof r.source !== "string" || typeof r.target !== "string") return null;
-      return {
-        id: typeof r.id === "string" ? r.id : `e_imported_${idx}`,
-        source: r.source,
-        target: r.target,
+  // ---- edges ----
+  const rawEdges = root.edges;
+  const edges: WorkflowEdge[] = [];
+  if (rawEdges !== undefined && !Array.isArray(rawEdges)) {
+    issues.push({ level: "warning", message: "`edges` is not an array — skipping all edges." });
+  } else if (Array.isArray(rawEdges)) {
+    rawEdges.forEach((raw, idx) => {
+      if (!isPlain(raw)) {
+        issues.push({ level: "warning", message: `Edge #${idx + 1}: not an object, skipped.` });
+        return;
+      }
+      const source = typeof raw.source === "string" ? raw.source : null;
+      const target = typeof raw.target === "string" ? raw.target : null;
+      if (!source || !target) {
+        issues.push({ level: "warning", message: `Edge #${idx + 1}: missing source/target, skipped.` });
+        return;
+      }
+      if (!validIds.has(source) || !validIds.has(target)) {
+        issues.push({
+          level: "warning",
+          message: `Edge #${idx + 1}: references unknown node (${!validIds.has(source) ? source : target}), skipped.`,
+        });
+        return;
+      }
+      edges.push({
+        id: typeof raw.id === "string" ? raw.id : `e_imported_${idx}`,
+        source,
+        target,
         animated: true,
-      };
-    })
-    .filter((e): e is WorkflowEdge => e !== null);
-}
+      });
+    });
+  }
 
-function coerceComments(input: unknown): Record<string, CommentNote[]> {
-  if (!input || typeof input !== "object") return {};
-  const out: Record<string, CommentNote[]> = {};
-  for (const [nodeId, val] of Object.entries(input as Record<string, unknown>)) {
-    if (Array.isArray(val)) {
-      out[nodeId] = val
-        .filter((n): n is Record<string, unknown> => !!n && typeof n === "object")
-        .map((n, i): CommentNote => ({
-          id: typeof n.id === "string" ? n.id : `c_imp_${nodeId}_${i}`,
-          author: typeof n.author === "string" ? n.author : "Imported",
-          body: typeof n.body === "string" ? n.body : "",
-          createdAt: typeof n.createdAt === "string" ? n.createdAt : new Date().toISOString(),
-        }))
-        .filter((n) => n.body.length > 0);
-    } else if (typeof val === "string" && val.trim()) {
-      // Legacy single-string format.
-      out[nodeId] = [
-        {
-          id: `c_imp_${nodeId}_legacy`,
-          author: "Imported",
-          body: val,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+  // ---- comments ----
+  const comments: Record<string, CommentNote[]> = {};
+  const rawComments = root.comments;
+  if (rawComments !== undefined && !isPlain(rawComments)) {
+    issues.push({ level: "warning", message: "`comments` is not an object — skipping comments." });
+  } else if (isPlain(rawComments)) {
+    for (const [nodeId, val] of Object.entries(rawComments)) {
+      if (!validIds.has(nodeId)) {
+        issues.push({
+          level: "warning",
+          message: `Comments for unknown node \`${nodeId}\` were skipped.`,
+        });
+        continue;
+      }
+      if (Array.isArray(val)) {
+        const list = val
+          .map((n, i): CommentNote | null => {
+            if (!isPlain(n)) return null;
+            const body = typeof n.body === "string" ? n.body : "";
+            if (!body.trim()) return null;
+            return {
+              id: typeof n.id === "string" ? n.id : `c_imp_${nodeId}_${i}`,
+              author: typeof n.author === "string" ? n.author : "Imported",
+              body,
+              createdAt: typeof n.createdAt === "string" ? n.createdAt : new Date().toISOString(),
+            };
+          })
+          .filter((n): n is CommentNote => n !== null);
+        if (list.length) comments[nodeId] = list;
+      } else if (typeof val === "string" && val.trim()) {
+        // Legacy single-string comment.
+        comments[nodeId] = [
+          {
+            id: `c_imp_${nodeId}_legacy`,
+            author: "Imported",
+            body: val,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
     }
   }
-  return out;
+
+  if (nodes.length > 0) {
+    issues.unshift({
+      level: "info",
+      message: `Salvaged ${nodes.length} node(s), ${edges.length} edge(s), ${
+        Object.values(comments).reduce((s, l) => s + l.length, 0)
+      } comment(s).`,
+    });
+  }
+
+  return { nodes, edges, comments, issues, fatal: nodes.length === 0 };
 }
 
 const SAMPLE = `{
@@ -118,66 +219,99 @@ const SAMPLE = `{
 
 export function ImportDialog({ open, onOpenChange, onImport }: Props) {
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
+
+  const result = useMemo<ParseResult | null>(() => {
+    if (!attempted) return null;
+    return parse(text);
+  }, [text, attempted]);
+
+  const handlePreview = () => setAttempted(true);
 
   const handleImport = () => {
-    setError(null);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid JSON");
+    const r = result ?? parse(text);
+    if (r.fatal || r.nodes.length === 0) {
+      setAttempted(true);
       return;
     }
-    if (!parsed || typeof parsed !== "object") {
-      setError("Expected a JSON object with `nodes` and `edges`.");
-      return;
-    }
-    const root = parsed as Record<string, unknown>;
-    const nodes = coerceNodes(root.nodes);
-    if (nodes.length === 0) {
-      setError("No valid nodes found. Each node needs `id` and `data.kind`.");
-      return;
-    }
-    const edges = coerceEdges(root.edges);
-    const comments = coerceComments(root.comments);
-    onImport({ nodes, edges, comments });
+    onImport({ nodes: r.nodes, edges: r.edges, comments: r.comments });
     onOpenChange(false);
     setText("");
+    setAttempted(false);
+  };
+
+  const close = (v: boolean) => {
+    onOpenChange(v);
+    if (!v) {
+      setAttempted(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import workflow JSON</DialogTitle>
           <DialogDescription>
-            Paste a workflow snapshot (nodes, edges, and optional comments) to replace the current
-            canvas.
+            Paste a workflow snapshot. Malformed nodes/edges are skipped — the issue list shows
+            exactly what was salvaged or dropped.
           </DialogDescription>
         </DialogHeader>
 
         <Textarea
-          rows={14}
+          rows={12}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setAttempted(false);
+          }}
           placeholder={SAMPLE}
           className="font-mono text-xs"
         />
 
-        {error && (
-          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{error}</span>
+        {result && (
+          <div className="max-h-44 space-y-1.5 overflow-auto rounded-md border border-border bg-secondary/30 p-2">
+            {result.issues.length === 0 ? (
+              <p className="px-1 text-xs text-muted-foreground">No issues — looks clean.</p>
+            ) : (
+              result.issues.map((i, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    "flex items-start gap-2 rounded px-2 py-1.5 text-xs",
+                    i.level === "error" && "bg-destructive/10 text-destructive",
+                    i.level === "warning" &&
+                      "bg-[var(--node-approval)]/10 text-[var(--node-approval)]",
+                    i.level === "info" && "bg-[var(--node-start)]/10 text-[var(--node-start)]",
+                  )}
+                >
+                  {i.level === "error" ? (
+                    <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  ) : i.level === "warning" ? (
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span>{i.message}</span>
+                </div>
+              ))
+            )}
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={() => close(false)}>
             Cancel
           </Button>
-          <Button onClick={handleImport} disabled={!text.trim()}>
-            <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          <Button variant="outline" onClick={handlePreview} disabled={!text.trim()}>
+            Validate
+          </Button>
+          <Button
+            onClick={handleImport}
+            disabled={!text.trim() || (!!result && result.fatal)}
+          >
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            Import {result && !result.fatal ? `(${result.nodes.length})` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>
