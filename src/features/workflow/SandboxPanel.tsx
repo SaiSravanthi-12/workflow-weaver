@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { SimulationResult, ValidationIssue, WorkflowEdge, WorkflowNode } from "./types";
+import type {
+  CommentNote,
+  SimulationResult,
+  ValidationIssue,
+  WorkflowEdge,
+  WorkflowNode,
+} from "./types";
 import { simulateWorkflow } from "./mockApi";
 import { validateWorkflow } from "./validation";
 import { exportSimulationPdf } from "./pdfExport";
@@ -23,7 +29,7 @@ interface SandboxPanelProps {
   workflowName: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-  comments: Record<string, string>;
+  comments: Record<string, CommentNote[]>;
 }
 
 export function SandboxPanel({
@@ -164,7 +170,7 @@ export function SandboxPanel({
             </SectionTitle>
             <ol className="relative ml-2 space-y-3 border-l border-border pl-4">
               {result.steps.map((s, i) => {
-                const note = comments[s.nodeId];
+                const notes = comments[s.nodeId] ?? [];
                 return (
                   <li key={`${s.nodeId}-${i}`} className="relative">
                     <span
@@ -187,11 +193,31 @@ export function SandboxPanel({
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">{s.message}</p>
-                    {note && (
-                      <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-dashed border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground">
-                        <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
-                        <span>{note}</span>
-                      </div>
+                    {notes.length > 0 && (
+                      <ul className="mt-1.5 space-y-1">
+                        {notes.map((n) => (
+                          <li
+                            key={n.id}
+                            className="flex items-start gap-1.5 rounded-md border border-dashed border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground"
+                          >
+                            <MessageSquare className="mt-0.5 h-3 w-3 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground">{n.author}</span>
+                                <span className="text-[10px]">
+                                  {new Date(n.createdAt).toLocaleString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap">{n.body}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </li>
                 );
