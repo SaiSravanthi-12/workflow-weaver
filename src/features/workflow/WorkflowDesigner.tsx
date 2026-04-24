@@ -233,10 +233,63 @@ function Inner({ workflowId }: DesignerProps) {
   }, [onUndo, onRedo]);
 
   // ---- Graph operations ----
-  const onConnect: OnConnect = useCallback(
-    (params: Connection) =>
-      setEdges((eds) => addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds)),
+  const applyConnection = useCallback(
+    (params: Connection) => {
+      setEdges((eds) =>
+        addEdge({ ...params, animated: true, style: { strokeWidth: 1.75 } }, eds),
+      );
+    },
     [setEdges],
+  );
+
+  const isValidConnection = useCallback<IsValidConnection>(
+    (conn) => checkConnection(conn as Connection, nodes, edges).ok,
+    [nodes, edges],
+  );
+
+  const onConnect: OnConnect = useCallback(
+    (params: Connection) => {
+      const check = checkConnection(params, nodes, edges);
+      if (!check.ok) {
+        const fix = check.fix;
+        toast.error(check.reason ?? "Invalid connection", {
+          action: fix
+            ? {
+                label: fix.label,
+                onClick: () => {
+                  if (fix.kind === "swap") applyConnection(fix.connection);
+                },
+              }
+            : undefined,
+        });
+        return;
+      }
+      if (check.reason && check.fix) {
+        // Allowed but with a friendly nudge (e.g. "no Start node yet").
+        const fix = check.fix as ConnectionFix;
+        toast.warning(check.reason, {
+          action:
+            fix.kind === "addStart"
+              ? {
+                  label: fix.label,
+                  onClick: () => {
+                    const id = uid("start");
+                    setNodes((ns) =>
+                      ns.concat({
+                        id,
+                        type: "start",
+                        position: { x: 80, y: 40 },
+                        data: defaultDataFor("start"),
+                      }),
+                    );
+                  },
+                }
+              : undefined,
+        });
+      }
+      applyConnection(params);
+    },
+    [nodes, edges, applyConnection, setNodes],
   );
 
   const addNode = useCallback(
