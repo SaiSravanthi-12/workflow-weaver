@@ -496,7 +496,7 @@ function Inner({ workflowId }: DesignerProps) {
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={onUndo}
+              onClick={onUndoAndResim}
               disabled={!history.canUndo}
               title="Undo (⌘Z)"
             >
@@ -506,7 +506,7 @@ function Inner({ workflowId }: DesignerProps) {
               size="icon"
               variant="ghost"
               className="h-8 w-8"
-              onClick={onRedo}
+              onClick={onRedoAndResim}
               disabled={!history.canRedo}
               title="Redo (⌘⇧Z)"
             >
@@ -514,12 +514,16 @@ function Inner({ workflowId }: DesignerProps) {
             </Button>
           </div>
 
-          <Button size="sm" variant="ghost" onClick={onAutoLayout} title="Auto-layout">
+          <Button size="sm" variant="ghost" onClick={onAutoLayoutAndResim} title="Auto-layout">
             <LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Layout
           </Button>
 
           <Button size="sm" variant="ghost" onClick={() => setImportOpen(true)} title="Import JSON">
             <Upload className="mr-1.5 h-3.5 w-3.5" /> Import
+          </Button>
+
+          <Button size="sm" variant="ghost" onClick={exportJson} title="Export workflow as JSON">
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Export
           </Button>
 
           <Button
